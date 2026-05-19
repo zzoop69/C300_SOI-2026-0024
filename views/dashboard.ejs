@@ -1,0 +1,62 @@
+<%- include("partials/header") %>
+
+<section class="stats-grid" aria-label="Payment checking summary">
+  <article class="stat-card">
+    <span>Total POs</span>
+    <strong><%= stats.totalPurchaseOrders %></strong>
+  </article>
+  <article class="stat-card">
+    <span>Total SOs</span>
+    <strong><%= stats.totalSalesOrders %></strong>
+  </article>
+  <article class="stat-card">
+    <span>Invoices Checked</span>
+    <strong><%= stats.invoicesChecked %></strong>
+  </article>
+  <article class="stat-card success">
+    <span>Matched</span>
+    <strong><%= stats.matched %></strong>
+  </article>
+  <article class="stat-card danger">
+    <span>Mismatched</span>
+    <strong><%= stats.mismatched %></strong>
+  </article>
+  <article class="stat-card warning">
+    <span>Pending</span>
+    <strong><%= stats.pending %></strong>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <h2>Recent Document Checks</h2>
+    <a class="button" href="/upload">Upload New Set</a>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Supplier</th>
+          <th>PO Number</th>
+          <th>Invoice Number</th>
+          <th>Total Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% recentSets.forEach((set) => { %>
+          <tr>
+            <td><%= set.po?.supplierName || set.invoice?.supplierName %></td>
+            <td><%= set.po?.poNumber || "Missing" %></td>
+            <td><%= set.invoice?.invoiceNumber || "Missing" %></td>
+            <td>$<%= Number(set.invoice?.totalAmount || 0).toFixed(2) %></td>
+            <td><span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

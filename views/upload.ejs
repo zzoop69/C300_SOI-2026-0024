@@ -1,0 +1,70 @@
+<%- include("partials/header") %>
+
+<% if (uploaded) { %>
+  <div class="notice success-notice">Document set uploaded. The demo extractor has saved the entered values for matching.</div>
+<% } %>
+
+<section class="panel">
+  <div class="section-heading">
+    <h2>Upload PO, SO, and Invoice</h2>
+    <p>Enter the extracted values manually for now. Later, OCR or PDF parsing can fill these fields automatically.</p>
+  </div>
+
+  <form class="form-grid" action="/upload" method="POST" enctype="multipart/form-data">
+    <label>
+      PO File
+      <input type="file" name="poFile">
+    </label>
+    <label>
+      SO File
+      <input type="file" name="soFile">
+    </label>
+    <label>
+      Invoice File
+      <input type="file" name="invoiceFile">
+    </label>
+
+    <label>
+      Supplier Name
+      <input type="text" name="supplierName" value="Delta Packaging Pte Ltd" required>
+    </label>
+    <label>
+      PO Number
+      <input type="text" name="poNumber" value="PO-1004" required>
+    </label>
+    <label>
+      SO Number
+      <input type="text" name="soNumber" value="SO-9004" required>
+    </label>
+    <label>
+      Invoice Number
+      <input type="text" name="invoiceNumber" value="INV-7004" required>
+    </label>
+    <label>
+      Item Name
+      <input type="text" name="itemName" value="Packaging Boxes" required>
+    </label>
+    <label>
+      Quantity
+      <input type="number" name="quantity" value="50" min="1" required>
+    </label>
+    <label>
+      Unit Price
+      <input type="number" name="unitPrice" value="4.50" step="0.01" min="0" required>
+    </label>
+    <label>
+      Total Amount
+      <input type="number" name="totalAmount" value="225.00" step="0.01" min="0" required>
+    </label>
+    <label>
+      Date
+      <input type="date" name="date" value="2026-05-10" required>
+    </label>
+
+    <div class="form-actions">
+      <button type="submit">Upload and Check</button>
+    </div>
+  </form>
+</section>
+
+<%- include("partials/footer") %>

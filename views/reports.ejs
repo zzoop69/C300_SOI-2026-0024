@@ -1,0 +1,56 @@
+<%- include("partials/header") %>
+
+<section class="report-summary">
+  <div>
+    <span>Matched</span>
+    <strong><%= stats.matched %></strong>
+  </div>
+  <div>
+    <span>Mismatched</span>
+    <strong><%= stats.mismatched %></strong>
+  </div>
+  <div>
+    <span>Pending Review</span>
+    <strong><%= stats.pending %></strong>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <h2>Automated Summary Report</h2>
+    <p>This table can be copied into a payment approval report.</p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Supplier</th>
+          <th>PO</th>
+          <th>SO</th>
+          <th>Invoice</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Issue Found</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach((row) => { %>
+          <tr>
+            <td>#<%= row.id %></td>
+            <td><%= row.supplierName %></td>
+            <td><%= row.poNumber %></td>
+            <td><%= row.soNumber %></td>
+            <td><%= row.invoiceNumber %></td>
+            <td>$<%= Number(row.totalAmount).toFixed(2) %></td>
+            <td><span class="status <%= row.status.toLowerCase().replace(' ', '-') %>"><%= row.status %></span></td>
+            <td><%= row.issue %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

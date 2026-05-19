@@ -1,0 +1,138 @@
+[
+  {
+    "id": 1,
+    "createdAt": "2026-05-01",
+    "po": {
+      "supplierName": "Alpha Office Supplies",
+      "poNumber": "PO-1001",
+      "itemName": "A4 Paper Box",
+      "quantity": 20,
+      "unitPrice": 12.5,
+      "totalAmount": 250,
+      "date": "2026-04-22"
+    },
+    "so": {
+      "supplierName": "Alpha Office Supplies",
+      "soNumber": "SO-9001",
+      "itemName": "A4 Paper Box",
+      "quantity": 20,
+      "unitPrice": 12.5,
+      "totalAmount": 250,
+      "date": "2026-04-22"
+    },
+    "invoice": {
+      "supplierName": "Alpha Office Supplies",
+      "invoiceNumber": "INV-7001",
+      "itemName": "A4 Paper Box",
+      "quantity": 20,
+      "unitPrice": 12.5,
+      "totalAmount": 250,
+      "date": "2026-04-22"
+    },
+    "uploadedFiles": {
+      "po": "alpha-po.pdf",
+      "so": "alpha-so.pdf",
+      "invoice": "alpha-invoice.pdf"
+    }
+  },
+  {
+    "id": 2,
+    "createdAt": "2026-05-03",
+    "po": {
+      "supplierName": "Bright Tech Hardware",
+      "poNumber": "PO-1002",
+      "itemName": "Wireless Keyboard",
+      "quantity": 10,
+      "unitPrice": 45,
+      "totalAmount": 450,
+      "date": "2026-04-25"
+    },
+    "so": {
+      "supplierName": "Bright Tech Hardware",
+      "soNumber": "SO-9002",
+      "itemName": "Wireless Keyboard",
+      "quantity": 10,
+      "unitPrice": 45,
+      "totalAmount": 450,
+      "date": "2026-04-25"
+    },
+    "invoice": {
+      "supplierName": "Bright Tech Hardware",
+      "invoiceNumber": "INV-7002",
+      "itemName": "Wireless Keyboard",
+      "quantity": 12,
+      "unitPrice": 45,
+      "totalAmount": 540,
+      "date": "2026-04-25"
+    },
+    "uploadedFiles": {
+      "po": "bright-po.pdf",
+      "so": "bright-so.pdf",
+      "invoice": "bright-invoice.pdf"
+    }
+  },
+  {
+    "id": 3,
+    "createdAt": "2026-05-05",
+    "po": {
+      "supplierName": "City Cleaning Services",
+      "poNumber": "PO-1003",
+      "itemName": "Monthly Cleaning",
+      "quantity": 1,
+      "unitPrice": 800,
+      "totalAmount": 800,
+      "date": "2026-04-30"
+    },
+    "so": null,
+    "invoice": {
+      "supplierName": "City Cleaning Services",
+      "invoiceNumber": "INV-7003",
+      "itemName": "Monthly Cleaning",
+      "quantity": 1,
+      "unitPrice": 800,
+      "totalAmount": 800,
+      "date": "2026-04-30"
+    },
+    "uploadedFiles": {
+      "po": "city-po.pdf",
+      "so": "Pending upload",
+      "invoice": "city-invoice.pdf"
+    }
+  },
+  {
+    "id": 4,
+    "createdAt": "2026-05-19",
+    "po": {
+      "supplierName": "ABC Packaging Pte Ltd",
+      "itemName": "Packaging Boxes",
+      "quantity": 80,
+      "unitPrice": 4.6,
+      "totalAmount": 220,
+      "date": "2026-05-10",
+      "poNumber": "PO-2005"
+    },
+    "so": {
+      "supplierName": "ABC Packaging Pte Ltd",
+      "itemName": "Packaging Boxes",
+      "quantity": 80,
+      "unitPrice": 4.6,
+      "totalAmount": 220,
+      "date": "2026-05-10",
+      "soNumber": "SO-8001"
+    },
+    "invoice": {
+      "supplierName": "ABC Packaging Pte Ltd",
+      "itemName": "Packaging Boxes",
+      "quantity": 80,
+      "unitPrice": 4.6,
+      "totalAmount": 220,
+      "date": "2026-05-10",
+      "invoiceNumber": "INV-7004"
+    },
+    "uploadedFiles": {
+      "po": "No PO file uploaded",
+      "so": "No SO file uploaded",
+      "invoice": "No invoice file uploaded"
+    }
+  }
+]

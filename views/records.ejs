@@ -1,0 +1,45 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <h2>Uploaded Document Records</h2>
+    <p>Each row represents one PO, SO, and invoice checking set.</p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date Added</th>
+          <th>Supplier</th>
+          <th>PO</th>
+          <th>SO</th>
+          <th>Invoice</th>
+          <th>Uploaded Files</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% documentSets.forEach((set) => { %>
+          <tr>
+            <td><%= set.createdAt %></td>
+            <td><%= set.po?.supplierName || set.invoice?.supplierName || "Unknown" %></td>
+            <td><%= set.po?.poNumber || "Missing" %></td>
+            <td><%= set.so?.soNumber || "Missing" %></td>
+            <td><%= set.invoice?.invoiceNumber || "Missing" %></td>
+            <td>
+              <small>
+                PO: <%= set.uploadedFiles.po %><br>
+                SO: <%= set.uploadedFiles.so %><br>
+                Invoice: <%= set.uploadedFiles.invoice %>
+              </small>
+            </td>
+            <td><span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

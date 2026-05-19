@@ -1,0 +1,53 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <h2>PO, SO, and Invoice Matching</h2>
+    <p>Mismatched fields are highlighted so finance staff know what to review.</p>
+  </div>
+
+  <% documentSets.forEach((set) => { %>
+    <article class="match-block">
+      <div class="match-title">
+        <div>
+          <h3><%= set.po?.supplierName || set.invoice?.supplierName || "Unknown supplier" %></h3>
+          <p>
+            <%= set.po?.poNumber || "No PO" %> /
+            <%= set.so?.soNumber || "No SO" %> /
+            <%= set.invoice?.invoiceNumber || "No invoice" %>
+          </p>
+        </div>
+        <span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span>
+      </div>
+
+      <% if (set.status === "Pending review") { %>
+        <div class="notice">This record is missing one or more documents and needs manual review.</div>
+      <% } %>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Purchase Order</th>
+              <th>Sales Order</th>
+              <th>Invoice</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% ["supplierName", "itemName", "quantity", "unitPrice", "totalAmount", "date"].forEach((field) => { %>
+              <tr class="<%= set.mismatchFields.includes(field) ? 'highlight-row' : '' %>">
+                <td><%= field.replace(/([A-Z])/g, " $1").replace(/^./, letter => letter.toUpperCase()) %></td>
+                <td><%= set.po?.[field] ?? "Missing" %></td>
+                <td><%= set.so?.[field] ?? "Missing" %></td>
+                <td><%= set.invoice?.[field] ?? "Missing" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  <% }) %>
+</section>
+
+<%- include("partials/footer") %>

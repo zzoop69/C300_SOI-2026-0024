@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= pageTitle %> | Autonomous Supplier Payment Process</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Autonomous Supplier Payment Process</p>
+      <h1><%= pageTitle %></h1>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <nav class="sidebar" aria-label="Main navigation">
+      <a class="<%= activePage === 'dashboard' ? 'active' : '' %>" href="/dashboard">Dashboard</a>
+      <a class="<%= activePage === 'upload' ? 'active' : '' %>" href="/upload">Upload Documents</a>
+      <a class="<%= activePage === 'records' ? 'active' : '' %>" href="/records">Document Records</a>
+      <a class="<%= activePage === 'matching' ? 'active' : '' %>" href="/matching-results">Matching Results</a>
+      <a class="<%= activePage === 'reports' ? 'active' : '' %>" href="/reports">Reports</a>
+    </nav>
+
+    <main class="content">
