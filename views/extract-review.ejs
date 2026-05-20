@@ -1,0 +1,70 @@
+<%- include("partials/header") %>
+
+<% if (saved) { %>
+  <div class="notice success-notice">Corrections saved successfully.</div>
+<% } %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Review Extracted Excel Data - Record #<%= record.id %></h2>
+      <p>Edit any extracted value before validation and matching.</p>
+    </div>
+    <a class="button" href="/validate-data?record=<%= record.id %>">Validate Record</a>
+  </div>
+
+  <form action="/extract/<%= record.id %>/save" method="POST">
+    <div class="review-grid">
+      <article class="review-card">
+        <div class="card-heading">
+          <h3>Purchase Order</h3>
+          <span class="status neutral"><%= record.purchaseOrderFile?.originalName || "Missing File" %></span>
+        </div>
+
+        <label>Supplier Name <input name="poSupplierName" value="<%= record.purchaseOrder?.supplierName || '' %>"></label>
+        <label>PO Reference Number <input name="poNumber" value="<%= record.purchaseOrder?.poNumber || '' %>"></label>
+        <label>Document Date <input type="date" name="poDocumentDate" value="<%= record.purchaseOrder?.documentDate || '' %>"></label>
+        <label>Item Description <input name="poItemDescription" value="<%= record.purchaseOrder?.itemDescription || '' %>"></label>
+        <label>Quantity Ordered <input type="number" step="0.01" name="poQuantityOrdered" value="<%= record.purchaseOrder?.quantityOrdered || '' %>"></label>
+        <label>Unit Price <input type="number" step="0.01" name="poUnitPrice" value="<%= record.purchaseOrder?.unitPrice || '' %>"></label>
+        <label>Total Amount <input type="number" step="0.01" name="poTotalAmount" value="<%= record.purchaseOrder?.totalAmount || '' %>"></label>
+      </article>
+
+      <article class="review-card">
+        <div class="card-heading">
+          <h3>DO / GRN</h3>
+          <span class="status neutral"><%= record.deliveryOrderFile?.originalName || "Missing File" %></span>
+        </div>
+
+        <label>Supplier Name <input name="doSupplierName" value="<%= record.deliveryOrder?.supplierName || '' %>"></label>
+        <label>PO Reference Number <input name="doPoNumber" value="<%= record.deliveryOrder?.poNumber || '' %>"></label>
+        <label>DO/GRN Number <input name="doGrnNumber" value="<%= record.deliveryOrder?.doGrnNumber || '' %>"></label>
+        <label>Document Date <input type="date" name="doDocumentDate" value="<%= record.deliveryOrder?.documentDate || '' %>"></label>
+        <label>Item Description <input name="doItemDescription" value="<%= record.deliveryOrder?.itemDescription || '' %>"></label>
+        <label>Quantity Received <input type="number" step="0.01" name="doQuantityReceived" value="<%= record.deliveryOrder?.quantityReceived || '' %>"></label>
+      </article>
+
+      <article class="review-card">
+        <div class="card-heading">
+          <h3>Supplier Invoice</h3>
+          <span class="status neutral"><%= record.invoiceFile?.originalName || "Missing File" %></span>
+        </div>
+
+        <label>Supplier Name <input name="invoiceSupplierName" value="<%= record.invoice?.supplierName || '' %>"></label>
+        <label>Invoice Number <input name="invoiceNumber" value="<%= record.invoice?.invoiceNumber || '' %>"></label>
+        <label>PO Reference Number <input name="invoicePoNumber" value="<%= record.invoice?.poNumber || '' %>"></label>
+        <label>Document Date <input type="date" name="invoiceDocumentDate" value="<%= record.invoice?.documentDate || '' %>"></label>
+        <label>Item Description <input name="invoiceItemDescription" value="<%= record.invoice?.itemDescription || '' %>"></label>
+        <label>Quantity Billed <input type="number" step="0.01" name="invoiceQuantityBilled" value="<%= record.invoice?.quantityBilled || '' %>"></label>
+        <label>Unit Price <input type="number" step="0.01" name="invoiceUnitPrice" value="<%= record.invoice?.unitPrice || '' %>"></label>
+        <label>Total Amount <input type="number" step="0.01" name="invoiceTotalAmount" value="<%= record.invoice?.totalAmount || '' %>"></label>
+      </article>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit">Save Corrections</button>
+    </div>
+  </form>
+</section>
+
+<%- include("partials/footer") %>

@@ -1,70 +1,45 @@
 <%- include("partials/header") %>
 
-<% if (uploaded) { %>
-  <div class="notice success-notice">Document set uploaded. The demo extractor has saved the entered values for matching.</div>
-<% } %>
-
 <section class="panel">
   <div class="section-heading">
-    <h2>Upload PO, SO, and Invoice</h2>
-    <p>Enter the extracted values manually for now. Later, OCR or PDF parsing can fill these fields automatically.</p>
+    <div>
+      <h2>Upload PO, DO/GRN, and Supplier Invoice</h2>
+      <p>Accepted file types: .xlsx, .xls, and .csv. The first worksheet and first data row will be extracted automatically.</p>
+    </div>
   </div>
 
-  <form class="form-grid" action="/upload" method="POST" enctype="multipart/form-data">
-    <label>
-      PO File
-      <input type="file" name="poFile">
-    </label>
-    <label>
-      SO File
-      <input type="file" name="soFile">
-    </label>
-    <label>
-      Invoice File
-      <input type="file" name="invoiceFile">
-    </label>
+  <form action="/upload" method="POST" enctype="multipart/form-data">
+    <div class="upload-grid two-column">
+      <label class="upload-box">
+        <span>Purchase Order Excel file</span>
+        <small>Columns: Supplier Name, PO Number, Item Description, Quantity Ordered, Unit Price, Total Amount, Document Date.</small>
+        <input type="file" name="poFile" accept=".xlsx,.xls,.csv" required>
+      </label>
 
-    <label>
-      Supplier Name
-      <input type="text" name="supplierName" value="Delta Packaging Pte Ltd" required>
-    </label>
-    <label>
-      PO Number
-      <input type="text" name="poNumber" value="PO-1004" required>
-    </label>
-    <label>
-      SO Number
-      <input type="text" name="soNumber" value="SO-9004" required>
-    </label>
-    <label>
-      Invoice Number
-      <input type="text" name="invoiceNumber" value="INV-7004" required>
-    </label>
-    <label>
-      Item Name
-      <input type="text" name="itemName" value="Packaging Boxes" required>
-    </label>
-    <label>
-      Quantity
-      <input type="number" name="quantity" value="50" min="1" required>
-    </label>
-    <label>
-      Unit Price
-      <input type="number" name="unitPrice" value="4.50" step="0.01" min="0" required>
-    </label>
-    <label>
-      Total Amount
-      <input type="number" name="totalAmount" value="225.00" step="0.01" min="0" required>
-    </label>
-    <label>
-      Date
-      <input type="date" name="date" value="2026-05-10" required>
-    </label>
+      <label class="upload-box">
+        <span>DO / GRN Excel file</span>
+        <small>Columns: Supplier Name, PO Number, DO/GRN Number, Item Description, Quantity Received, Document Date.</small>
+        <input type="file" name="doGrnFile" accept=".xlsx,.xls,.csv" required>
+      </label>
+
+      <label class="upload-box">
+        <span>Supplier Invoice Excel file</span>
+        <small>Columns: Supplier Name, PO Number, Invoice Number, Item Description, Quantity Billed, Unit Price, Total Amount, Document Date.</small>
+        <input type="file" name="invoiceFile" accept=".xlsx,.xls,.csv" required>
+      </label>
+    </div>
 
     <div class="form-actions">
-      <button type="submit">Upload and Check</button>
+      <button type="submit">Upload and Extract Data</button>
     </div>
   </form>
+</section>
+
+<section class="panel muted-panel">
+  <h2>Excel Column Guide</h2>
+  <p>Purchase Order: Supplier Name, PO Number, Item Description, Quantity Ordered, Unit Price, Total Amount, Document Date.</p>
+  <p>DO/GRN: Supplier Name, PO Number, DO/GRN Number, Item Description, Quantity Received, Document Date.</p>
+  <p>Supplier Invoice: Supplier Name, PO Number, Invoice Number, Item Description, Quantity Billed, Unit Price, Total Amount, Document Date.</p>
 </section>
 
 <%- include("partials/footer") %>

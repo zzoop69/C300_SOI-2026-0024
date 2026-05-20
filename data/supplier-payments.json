@@ -1,138 +1,160 @@
 [
   {
     "id": 1,
-    "createdAt": "2026-05-01",
-    "po": {
-      "supplierName": "Alpha Office Supplies",
-      "poNumber": "PO-1001",
-      "itemName": "A4 Paper Box",
-      "quantity": 20,
-      "unitPrice": 12.5,
-      "totalAmount": 250,
-      "date": "2026-04-22"
+    "createdAt": "2026-05-20T04:41:36.758Z",
+    "purchaseOrderFile": {
+      "originalName": "purchase_order_template.xlsx",
+      "storedName": "82949804e01878541842c9e0de79c7b4",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\82949804e01878541842c9e0de79c7b4",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
-    "so": {
-      "supplierName": "Alpha Office Supplies",
-      "soNumber": "SO-9001",
-      "itemName": "A4 Paper Box",
-      "quantity": 20,
-      "unitPrice": 12.5,
-      "totalAmount": 250,
-      "date": "2026-04-22"
+    "invoiceFile": {
+      "originalName": "supplier_invoice_with_data.xlsx",
+      "storedName": "d0315f6bbc3f708b1036d6f99486e2ff",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\d0315f6bbc3f708b1036d6f99486e2ff",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "purchaseOrder": {
+      "poNumber": "PO001",
+      "orderDate": "2026-04-20",
+      "supplierName": "ABC Supplies",
+      "supplierContact": "91234567",
+      "itemName": "Rice",
+      "description": "5kg bag",
+      "quantity": "10",
+      "unitPrice": "20",
+      "totalPrice": "200",
+      "deliveryDate": "2026-04-22",
+      "deliveryAddress": "Warehouse A"
     },
     "invoice": {
-      "supplierName": "Alpha Office Supplies",
-      "invoiceNumber": "INV-7001",
-      "itemName": "A4 Paper Box",
-      "quantity": 20,
-      "unitPrice": 12.5,
-      "totalAmount": 250,
-      "date": "2026-04-22"
+      "invoiceNumber": "INV001",
+      "orderNumber": "ORD001",
+      "orderDate": "2026-04-20",
+      "supplierName": "ABC Supplies",
+      "supplierContact": "91234567",
+      "itemName": "Rice",
+      "description": "5kg bag",
+      "quantity": "10",
+      "unitPrice": "20",
+      "itemTotal": "200",
+      "subtotal": "200"
     },
-    "uploadedFiles": {
-      "po": "alpha-po.pdf",
-      "so": "alpha-so.pdf",
-      "invoice": "alpha-invoice.pdf"
-    }
+    "extractionStatus": "Extracted",
+    "paymentStatus": "Pending Approval",
+    "payment": null
   },
   {
     "id": 2,
-    "createdAt": "2026-05-03",
-    "po": {
-      "supplierName": "Bright Tech Hardware",
-      "poNumber": "PO-1002",
-      "itemName": "Wireless Keyboard",
-      "quantity": 10,
-      "unitPrice": 45,
-      "totalAmount": 450,
-      "date": "2026-04-25"
+    "createdAt": "2026-05-20T15:50:40.428Z",
+    "purchaseOrderFile": {
+      "originalName": "purchase_order_template.xlsx",
+      "storedName": "d2a6167c7a4a357002b8921e67a876ad",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\d2a6167c7a4a357002b8921e67a876ad",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
-    "so": {
-      "supplierName": "Bright Tech Hardware",
-      "soNumber": "SO-9002",
-      "itemName": "Wireless Keyboard",
-      "quantity": 10,
-      "unitPrice": 45,
-      "totalAmount": 450,
-      "date": "2026-04-25"
+    "deliveryOrderFile": {
+      "originalName": "DO_GRN_Sample.xlsx",
+      "storedName": "2df4f790f8bc0fabf3004f720bc66482",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\2df4f790f8bc0fabf3004f720bc66482",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "invoiceFile": {
+      "originalName": "supplier_invoice_with_data.xlsx",
+      "storedName": "aa60dfcde46f856af90bb17086f3601b",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\aa60dfcde46f856af90bb17086f3601b",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "purchaseOrder": {
+      "supplierName": "ABC Supplies",
+      "poNumber": "PO001",
+      "itemDescription": "5kg bag",
+      "quantityOrdered": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
+    },
+    "deliveryOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-015",
+      "doGrnNumber": "GRN-2026-001",
+      "itemDescription": "Office Chair",
+      "quantityReceived": "50",
+      "documentDate": "2026-04-20"
     },
     "invoice": {
-      "supplierName": "Bright Tech Hardware",
-      "invoiceNumber": "INV-7002",
-      "itemName": "Wireless Keyboard",
-      "quantity": 12,
-      "unitPrice": 45,
-      "totalAmount": 540,
-      "date": "2026-04-25"
+      "supplierName": "ABC Supplies",
+      "poNumber": "ORD001",
+      "invoiceNumber": "INV001",
+      "itemDescription": "5kg bag",
+      "quantityBilled": "10",
+      "unitPrice": "20",
+      "totalAmount": "218",
+      "documentDate": "2026-04-20"
     },
-    "uploadedFiles": {
-      "po": "bright-po.pdf",
-      "so": "bright-so.pdf",
-      "invoice": "bright-invoice.pdf"
-    }
+    "extractionStatus": "Reviewed",
+    "paymentStatus": "Pending Approval",
+    "approvalStatus": "Not Approved",
+    "payment": null
   },
   {
     "id": 3,
-    "createdAt": "2026-05-05",
-    "po": {
-      "supplierName": "City Cleaning Services",
-      "poNumber": "PO-1003",
-      "itemName": "Monthly Cleaning",
-      "quantity": 1,
-      "unitPrice": 800,
-      "totalAmount": 800,
-      "date": "2026-04-30"
+    "createdAt": "2026-05-20T15:55:41.865Z",
+    "purchaseOrderFile": {
+      "originalName": "MATCHED_PO.xlsx",
+      "storedName": "bf18cedac27fca14c79e95176bff1ac3",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\bf18cedac27fca14c79e95176bff1ac3",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
-    "so": null,
-    "invoice": {
-      "supplierName": "City Cleaning Services",
-      "invoiceNumber": "INV-7003",
-      "itemName": "Monthly Cleaning",
-      "quantity": 1,
-      "unitPrice": 800,
-      "totalAmount": 800,
-      "date": "2026-04-30"
+    "deliveryOrderFile": {
+      "originalName": "MATCHED_DO_GRN.xlsx",
+      "storedName": "b8b240ba9f77a551709bc8506febe7eb",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\b8b240ba9f77a551709bc8506febe7eb",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
-    "uploadedFiles": {
-      "po": "city-po.pdf",
-      "so": "Pending upload",
-      "invoice": "city-invoice.pdf"
-    }
-  },
-  {
-    "id": 4,
-    "createdAt": "2026-05-19",
-    "po": {
-      "supplierName": "ABC Packaging Pte Ltd",
-      "itemName": "Packaging Boxes",
-      "quantity": 80,
-      "unitPrice": 4.6,
-      "totalAmount": 220,
-      "date": "2026-05-10",
-      "poNumber": "PO-2005"
+    "invoiceFile": {
+      "originalName": "MATCHED_SUPPLIER_INVOICE.xlsx",
+      "storedName": "1d1ac9f6fd68390c18e20a855756fa52",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\1d1ac9f6fd68390c18e20a855756fa52",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
-    "so": {
-      "supplierName": "ABC Packaging Pte Ltd",
-      "itemName": "Packaging Boxes",
-      "quantity": 80,
-      "unitPrice": 4.6,
-      "totalAmount": 220,
-      "date": "2026-05-10",
-      "soNumber": "SO-8001"
+    "purchaseOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityOrdered": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-05-20"
+    },
+    "deliveryOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "doGrnNumber": "GRN-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityReceived": "10",
+      "documentDate": "2026-05-20"
     },
     "invoice": {
-      "supplierName": "ABC Packaging Pte Ltd",
-      "itemName": "Packaging Boxes",
-      "quantity": 80,
-      "unitPrice": 4.6,
-      "totalAmount": 220,
-      "date": "2026-05-10",
-      "invoiceNumber": "INV-7004"
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "invoiceNumber": "INV-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityBilled": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-05-22"
     },
-    "uploadedFiles": {
-      "po": "No PO file uploaded",
-      "so": "No SO file uploaded",
-      "invoice": "No invoice file uploaded"
-    }
+    "extractionStatus": "Reviewed",
+    "paymentStatus": "Paid",
+    "approvalStatus": "Approved",
+    "payment": {
+      "transactionId": "PAY-2026-0002",
+      "method": "Demo Bank Transfer",
+      "amountPaid": "200",
+      "paidAt": "2026-05-20T15:56:54.281Z",
+      "status": "Paid"
+    },
+    "approvedAt": "2026-05-20T15:56:52.026Z"
   }
 ]

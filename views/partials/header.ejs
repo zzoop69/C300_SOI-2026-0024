@@ -7,20 +7,27 @@
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">Autonomous Supplier Payment Process</p>
-      <h1><%= pageTitle %></h1>
-    </div>
-  </header>
-
   <div class="app-shell">
     <nav class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <span>ASPP</span>
+        <div>
+          <strong>SupplierPay</strong>
+          <small>Payment checks</small>
+        </div>
+      </div>
       <a class="<%= activePage === 'dashboard' ? 'active' : '' %>" href="/dashboard">Dashboard</a>
       <a class="<%= activePage === 'upload' ? 'active' : '' %>" href="/upload">Upload Documents</a>
-      <a class="<%= activePage === 'records' ? 'active' : '' %>" href="/records">Document Records</a>
+      <a class="<%= activePage === 'review' ? 'active' : '' %>" href="/extracted-data">Extracted Data Review</a>
+      <a class="<%= activePage === 'validate' ? 'active' : '' %>" href="/validate-data">Validate Data</a>
       <a class="<%= activePage === 'matching' ? 'active' : '' %>" href="/matching-results">Matching Results</a>
+      <a class="<%= activePage === 'approval' ? 'active' : '' %>" href="/payment-approval">Payment Approval</a>
+      <a class="<%= activePage === 'simulation' ? 'active' : '' %>" href="/payment-simulation">Payment Simulation</a>
       <a class="<%= activePage === 'reports' ? 'active' : '' %>" href="/reports">Reports</a>
     </nav>
 
     <main class="content">
+      <header class="page-header">
+        <p class="eyebrow">Autonomous Supplier Payment Process</p>
+        <h1><%= pageTitle %></h1>
+      </header>

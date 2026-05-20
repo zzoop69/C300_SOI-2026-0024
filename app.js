@@ -7,7 +7,7 @@ const { ensureDataFile } = require("./models/supplierpayment");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Create the JSON data file with demo records when the project first runs.
+// Create the JSON data file and upload folder when the project first runs.
 ensureDataFile();
 
 app.set("view engine", "ejs");

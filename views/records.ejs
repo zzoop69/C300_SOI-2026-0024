@@ -2,44 +2,47 @@
 
 <section class="panel">
   <div class="section-heading">
-    <h2>Uploaded Document Records</h2>
-    <p>Each row represents one PO, SO, and invoice checking set.</p>
+    <div>
+      <h2>Extracted Data Records</h2>
+      <p>Select a saved record to review or correct the extracted Excel fields.</p>
+    </div>
+    <a class="button" href="/upload">Upload New Files</a>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Date Added</th>
-          <th>Supplier</th>
-          <th>PO</th>
-          <th>SO</th>
-          <th>Invoice</th>
-          <th>Uploaded Files</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% documentSets.forEach((set) => { %>
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No extracted records yet.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
           <tr>
-            <td><%= set.createdAt %></td>
-            <td><%= set.po?.supplierName || set.invoice?.supplierName || "Unknown" %></td>
-            <td><%= set.po?.poNumber || "Missing" %></td>
-            <td><%= set.so?.soNumber || "Missing" %></td>
-            <td><%= set.invoice?.invoiceNumber || "Missing" %></td>
-            <td>
-              <small>
-                PO: <%= set.uploadedFiles.po %><br>
-                SO: <%= set.uploadedFiles.so %><br>
-                Invoice: <%= set.uploadedFiles.invoice %>
-              </small>
-            </td>
-            <td><span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span></td>
+            <th>Record</th>
+            <th>Uploaded</th>
+            <th>PO File</th>
+            <th>DO/GRN File</th>
+            <th>Invoice File</th>
+            <th>Supplier</th>
+            <th>Status</th>
+            <th>Review</th>
           </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          <% records.forEach((record) => { %>
+            <tr>
+              <td>#<%= record.id %></td>
+              <td><%= new Date(record.createdAt).toLocaleDateString() %></td>
+              <td><%= record.purchaseOrderFile?.originalName || "Missing" %></td>
+              <td><%= record.deliveryOrderFile?.originalName || "Missing" %></td>
+              <td><%= record.invoiceFile?.originalName || "Missing" %></td>
+              <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review" %></td>
+              <td><span class="status <%= record.extractionStatus.toLowerCase().replaceAll(' ', '-') %>"><%= record.extractionStatus %></span></td>
+              <td><a class="table-link" href="/extract/<%= record.id %>">Open review</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
 </section>
 
 <%- include("partials/footer") %>

@@ -1,0 +1,38 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Validation Checks</h2>
+      <p>Required fields, positive numbers, total calculations, PO/invoice numbers, supplier name, and order dates are checked.</p>
+    </div>
+  </div>
+
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No records to validate.</div>
+  <% } %>
+
+  <% records.forEach((record) => { %>
+    <article class="match-block <%= String(record.id) === String(selectedRecordId) ? 'selected-block' : '' %>">
+      <div class="match-title">
+        <div>
+          <h3>Record #<%= record.id %></h3>
+          <p><%= record.validation.messages.join(" ") %></p>
+        </div>
+        <span class="status <%= record.validation.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.validation.status %></span>
+      </div>
+
+      <% if (record.validation.invalidFields.length > 0) { %>
+        <div class="invalid-list">
+          <% record.validation.invalidFields.forEach((field) => { %>
+            <span><%= field %></span>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <a class="table-link" href="/extract/<%= record.id %>">Correct highlighted fields</a>
+    </article>
+  <% }) %>
+</section>
+
+<%- include("partials/footer") %>

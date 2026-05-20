@@ -2,27 +2,25 @@
 
 <section class="panel">
   <div class="section-heading">
-    <h2>PO, SO, and Invoice Matching</h2>
-    <p>Mismatched fields are highlighted so finance staff know what to review.</p>
+    <div>
+      <h2>Dynamic 3-Way Matching Results</h2>
+      <p>PO, DO/GRN, and Supplier Invoice values are compared from uploaded Excel data and saved corrections.</p>
+    </div>
   </div>
 
-  <% documentSets.forEach((set) => { %>
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No matching results yet. Upload and review documents first.</div>
+  <% } %>
+
+  <% records.forEach((record) => { %>
     <article class="match-block">
       <div class="match-title">
         <div>
-          <h3><%= set.po?.supplierName || set.invoice?.supplierName || "Unknown supplier" %></h3>
-          <p>
-            <%= set.po?.poNumber || "No PO" %> /
-            <%= set.so?.soNumber || "No SO" %> /
-            <%= set.invoice?.invoiceNumber || "No invoice" %>
-          </p>
+          <h3>Record #<%= record.id %></h3>
+          <p><%= record.matching.message %></p>
         </div>
-        <span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span>
+        <span class="status <%= record.matching.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.matching.status %></span>
       </div>
-
-      <% if (set.status === "Pending review") { %>
-        <div class="notice">This record is missing one or more documents and needs manual review.</div>
-      <% } %>
 
       <div class="table-wrap">
         <table>
@@ -30,22 +28,54 @@
             <tr>
               <th>Field</th>
               <th>Purchase Order</th>
-              <th>Sales Order</th>
-              <th>Invoice</th>
+              <th>DO/GRN</th>
+              <th>Supplier Invoice</th>
+              <th>Result</th>
             </tr>
           </thead>
           <tbody>
-            <% ["supplierName", "itemName", "quantity", "unitPrice", "totalAmount", "date"].forEach((field) => { %>
-              <tr class="<%= set.mismatchFields.includes(field) ? 'highlight-row' : '' %>">
-                <td><%= field.replace(/([A-Z])/g, " $1").replace(/^./, letter => letter.toUpperCase()) %></td>
-                <td><%= set.po?.[field] ?? "Missing" %></td>
-                <td><%= set.so?.[field] ?? "Missing" %></td>
-                <td><%= set.invoice?.[field] ?? "Missing" %></td>
+            <% record.matching.rows.forEach((row) => { %>
+              <tr class="<%= row.result === 'Mismatch' ? 'highlight-row' : '' %>">
+                <td><%= row.label %></td>
+                <td><%= row.poValue %></td>
+                <td><%= row.doGrnValue %></td>
+                <td><%= row.invoiceValue %></td>
+                <td><span class="status <%= row.result.toLowerCase() %>"><%= row.result %></span></td>
               </tr>
             <% }) %>
           </tbody>
         </table>
       </div>
+
+      <% if (record.discrepancies.length > 0) { %>
+        <h3 class="subheading">Discrepancies</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mismatch Field</th>
+                <th>PO Value</th>
+                <th>DO/GRN Value</th>
+                <th>Invoice Value</th>
+                <th>Type</th>
+                <th>Recommended Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% record.discrepancies.forEach((discrepancy) => { %>
+                <tr>
+                  <td><%= discrepancy.field %></td>
+                  <td><%= discrepancy.poValue %></td>
+                  <td><%= discrepancy.doGrnValue %></td>
+                  <td><%= discrepancy.invoiceValue %></td>
+                  <td><%= discrepancy.type %></td>
+                  <td><%= discrepancy.action %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
     </article>
   <% }) %>
 </section>

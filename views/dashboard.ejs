@@ -1,62 +1,70 @@
 <%- include("partials/header") %>
 
-<section class="stats-grid" aria-label="Payment checking summary">
-  <article class="stat-card">
-    <span>Total POs</span>
-    <strong><%= stats.totalPurchaseOrders %></strong>
-  </article>
-  <article class="stat-card">
-    <span>Total SOs</span>
-    <strong><%= stats.totalSalesOrders %></strong>
-  </article>
-  <article class="stat-card">
-    <span>Invoices Checked</span>
-    <strong><%= stats.invoicesChecked %></strong>
-  </article>
-  <article class="stat-card success">
-    <span>Matched</span>
-    <strong><%= stats.matched %></strong>
-  </article>
-  <article class="stat-card danger">
-    <span>Mismatched</span>
-    <strong><%= stats.mismatched %></strong>
-  </article>
-  <article class="stat-card warning">
-    <span>Pending</span>
-    <strong><%= stats.pending %></strong>
-  </article>
+<section class="workflow-strip">
+  <div><span>1</span> Upload Excel</div>
+  <div><span>2</span> Review Data</div>
+  <div><span>3</span> Validate</div>
+  <div><span>4</span> Match</div>
+  <div><span>5</span> Pay Demo</div>
+</section>
+
+<section class="stats-grid dashboard-grid" aria-label="Payment checking summary">
+  <article class="stat-card"><span>Uploaded Sets</span><strong><%= stats.totalUploadedDocumentSets %></strong></article>
+  <article class="stat-card success"><span>Matched Records</span><strong><%= stats.matched %></strong></article>
+  <article class="stat-card danger"><span>Mismatched Records</span><strong><%= stats.mismatched %></strong></article>
+  <article class="stat-card warning"><span>Pending Review</span><strong><%= stats.pendingReview %></strong></article>
+  <article class="stat-card danger"><span>Discrepancies</span><strong><%= stats.discrepancies %></strong></article>
+  <article class="stat-card warning"><span>Pending Approval</span><strong><%= stats.pendingApproval %></strong></article>
+  <article class="stat-card"><span>Approved Payments</span><strong><%= stats.approvedPayments %></strong></article>
+  <article class="stat-card success"><span>Paid Invoices</span><strong><%= stats.paidInvoices %></strong></article>
+  <article class="stat-card"><span>Total Amount Paid</span><strong>$<%= Number(stats.totalAmountPaid).toFixed(2) %></strong></article>
 </section>
 
 <section class="panel">
   <div class="section-heading">
-    <h2>Recent Document Checks</h2>
-    <a class="button" href="/upload">Upload New Set</a>
+    <div>
+      <h2>Recent Excel Records</h2>
+      <p>All dashboard data is calculated from uploaded files and saved JSON records.</p>
+    </div>
+    <a class="button" href="/upload">Upload Documents</a>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Supplier</th>
-          <th>PO Number</th>
-          <th>Invoice Number</th>
-          <th>Total Amount</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% recentSets.forEach((set) => { %>
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No records yet. Upload a Purchase Order and Supplier Invoice Excel file to begin.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
           <tr>
-            <td><%= set.po?.supplierName || set.invoice?.supplierName %></td>
-            <td><%= set.po?.poNumber || "Missing" %></td>
-            <td><%= set.invoice?.invoiceNumber || "Missing" %></td>
-            <td>$<%= Number(set.invoice?.totalAmount || 0).toFixed(2) %></td>
-            <td><span class="status <%= set.status.toLowerCase().replace(' ', '-') %>"><%= set.status %></span></td>
+            <th>Record</th>
+            <th>Supplier</th>
+            <th>PO No</th>
+            <th>DO/GRN No</th>
+            <th>Invoice No</th>
+            <th>Amount</th>
+            <th>Match</th>
+            <th>Validation</th>
+            <th>Payment</th>
           </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          <% records.forEach((record) => { %>
+            <tr>
+              <td>#<%= record.id %></td>
+              <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review" %></td>
+              <td><%= record.purchaseOrder?.poNumber || "Missing" %></td>
+              <td><%= record.deliveryOrder?.doGrnNumber || "Missing" %></td>
+              <td><%= record.invoice?.invoiceNumber || "Missing" %></td>
+              <td>$<%= Number(record.amountPayable || 0).toFixed(2) %></td>
+              <td><span class="status <%= record.matching.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.matching.status %></span></td>
+              <td><span class="status <%= record.validation.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.validation.status %></span></td>
+              <td><%= record.paymentStatus %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
 </section>
 
 <%- include("partials/footer") %>

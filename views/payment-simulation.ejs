@@ -1,0 +1,34 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Demo Payment Simulation</h2>
+      <p>Approved records can be marked as paid for demonstration only.</p>
+    </div>
+  </div>
+
+  <div class="approval-grid">
+    <% records.forEach((record) => { %>
+      <article class="approval-card">
+        <div class="card-heading">
+          <h3><%= record.invoice?.invoiceNumber || "Missing Invoice" %></h3>
+          <span class="status <%= record.paymentStatus.toLowerCase().replaceAll(' ', '-') %>"><%= record.paymentStatus %></span>
+        </div>
+
+        <dl class="details-list">
+          <div><dt>Supplier</dt><dd><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Missing" %></dd></div>
+          <div><dt>Amount</dt><dd>$<%= Number(record.amountPayable || 0).toFixed(2) %></dd></div>
+          <div><dt>PO Number</dt><dd><%= record.purchaseOrder?.poNumber || "Missing" %></dd></div>
+        </dl>
+
+        <form action="/payment-simulation/<%= record.id %>/pay" method="POST">
+          <input type="hidden" name="paymentMethod" value="Demo Bank Transfer">
+          <button type="submit" <%= record.paymentStatus === "Approved for Payment" || record.paymentStatus === "Payment Processing" ? "" : "disabled" %>>Mark as Paid</button>
+        </form>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

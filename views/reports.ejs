@@ -1,51 +1,143 @@
 <%- include("partials/header") %>
 
 <section class="report-summary">
-  <div>
-    <span>Matched</span>
-    <strong><%= stats.matched %></strong>
-  </div>
-  <div>
-    <span>Mismatched</span>
-    <strong><%= stats.mismatched %></strong>
-  </div>
-  <div>
-    <span>Pending Review</span>
-    <strong><%= stats.pending %></strong>
-  </div>
+  <div><span>Uploaded Sets</span><strong><%= stats.totalUploadedDocumentSets %></strong></div>
+  <div><span>Matched</span><strong><%= stats.matched %></strong></div>
+  <div><span>Mismatched</span><strong><%= stats.mismatched %></strong></div>
+  <div><span>Pending Review</span><strong><%= stats.pendingReview %></strong></div>
+  <div><span>Discrepancies</span><strong><%= stats.discrepancies %></strong></div>
+  <div><span>Total Paid</span><strong>$<%= Number(stats.totalAmountPaid || 0).toFixed(2) %></strong></div>
 </section>
 
 <section class="panel">
   <div class="section-heading">
-    <h2>Automated Summary Report</h2>
-    <p>This table can be copied into a payment approval report.</p>
+    <div>
+      <h2>Matching History</h2>
+      <p>Generated from saved upload records.</p>
+    </div>
+  </div>
+
+  <% if (rows.length === 0) { %>
+    <div class="empty-state">No saved records are available for reporting.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Record</th>
+            <th>Supplier</th>
+            <th>PO</th>
+            <th>DO/GRN</th>
+            <th>Invoice</th>
+            <th>Amount</th>
+            <th>Match</th>
+            <th>Validation</th>
+            <th>Approval</th>
+            <th>Payment</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach((row) => { %>
+            <tr>
+              <td>#<%= row.id %></td>
+              <td><%= row.supplierName %></td>
+              <td><%= row.poNumber %></td>
+              <td><%= row.doGrnNumber %></td>
+              <td><%= row.invoiceNumber %></td>
+              <td>$<%= Number(row.amount || 0).toFixed(2) %></td>
+              <td><span class="status <%= row.matchStatus.toLowerCase().replaceAll(' ', '-') %>"><%= row.matchStatus %></span></td>
+              <td><span class="status <%= row.validationStatus.toLowerCase().replaceAll(' ', '-') %>"><%= row.validationStatus %></span></td>
+              <td><%= row.approvalStatus %></td>
+              <td><%= row.paymentStatus %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Discrepancy Report</h2>
+      <p>Each discrepancy is generated dynamically from the PO, DO/GRN, and Supplier Invoice values.</p>
+    </div>
+  </div>
+
+  <% if (discrepancies.length === 0) { %>
+    <div class="empty-state">No discrepancies found.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Record</th>
+            <th>Supplier</th>
+            <th>PO</th>
+            <th>DO/GRN</th>
+            <th>Invoice</th>
+            <th>Mismatch Field</th>
+            <th>PO Value</th>
+            <th>DO/GRN Value</th>
+            <th>Invoice Value</th>
+            <th>Type</th>
+            <th>Recommended Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% discrepancies.forEach((row) => { %>
+            <tr>
+              <td>#<%= row.recordId %></td>
+              <td><%= row.supplierName %></td>
+              <td><%= row.poNumber %></td>
+              <td><%= row.doGrnNumber %></td>
+              <td><%= row.invoiceNumber %></td>
+              <td><%= row.field %></td>
+              <td><%= row.poValue %></td>
+              <td><%= row.doGrnValue %></td>
+              <td><%= row.invoiceValue %></td>
+              <td><%= row.type %></td>
+              <td><%= row.action %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Payment History</h2>
+      <p>Demo payment statuses and transaction IDs only.</p>
+    </div>
   </div>
 
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Supplier</th>
-          <th>PO</th>
-          <th>SO</th>
+          <th>Record</th>
           <th>Invoice</th>
           <th>Amount</th>
-          <th>Status</th>
-          <th>Issue Found</th>
+          <th>Payment Status</th>
+          <th>Transaction</th>
+          <th>Method</th>
+          <th>Paid At</th>
         </tr>
       </thead>
       <tbody>
         <% rows.forEach((row) => { %>
           <tr>
             <td>#<%= row.id %></td>
-            <td><%= row.supplierName %></td>
-            <td><%= row.poNumber %></td>
-            <td><%= row.soNumber %></td>
             <td><%= row.invoiceNumber %></td>
-            <td>$<%= Number(row.totalAmount).toFixed(2) %></td>
-            <td><span class="status <%= row.status.toLowerCase().replace(' ', '-') %>"><%= row.status %></span></td>
-            <td><%= row.issue %></td>
+            <td>$<%= Number(row.amount || 0).toFixed(2) %></td>
+            <td><%= row.paymentStatus %></td>
+            <td><%= row.transactionId %></td>
+            <td><%= row.paymentMethod %></td>
+            <td><%= row.paidAt ? new Date(row.paidAt).toLocaleString() : "-" %></td>
           </tr>
         <% }) %>
       </tbody>

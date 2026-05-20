@@ -1,0 +1,100 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Supplier Payment List</h2>
+      <p>Only invoices that are Matched, Valid, and have no unresolved discrepancy are listed here.</p>
+    </div>
+  </div>
+
+  <% if (paymentList.length === 0) { %>
+    <div class="empty-state">No invoices are currently eligible for payment approval.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th>Invoice</th>
+            <th>PO Number</th>
+            <th>Amount Payable</th>
+            <th>Match Status</th>
+            <th>Validation Status</th>
+            <th>Approval Status</th>
+            <th>Payment Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% paymentList.forEach((record) => { %>
+            <tr>
+              <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Missing" %></td>
+              <td><%= record.invoice?.invoiceNumber || "Missing" %></td>
+              <td><%= record.purchaseOrder?.poNumber || "Missing" %></td>
+              <td>$<%= Number(record.amountPayable || 0).toFixed(2) %></td>
+              <td><span class="status matched"><%= record.matching.status %></span></td>
+              <td><span class="status valid"><%= record.validation.status %></span></td>
+              <td><%= record.approvalStatus %></td>
+              <td><%= record.paymentStatus %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Payment Approval Workflow</h2>
+      <p>This is a demo approval and payment flow only. It does not connect to a real payment gateway.</p>
+    </div>
+  </div>
+
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No records are ready for approval yet.</div>
+  <% } %>
+
+  <div class="approval-grid">
+    <% records.forEach((record) => { %>
+      <article class="approval-card">
+        <div class="card-heading">
+          <h3><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs review" %></h3>
+          <span class="status <%= record.paymentStatus.toLowerCase().replaceAll(' ', '-') %>"><%= record.paymentStatus %></span>
+        </div>
+
+        <dl class="details-list">
+          <div><dt>Invoice Number</dt><dd><%= record.invoice?.invoiceNumber || "Missing" %></dd></div>
+          <div><dt>PO Number</dt><dd><%= record.purchaseOrder?.poNumber || "Missing" %></dd></div>
+          <div><dt>DO/GRN Number</dt><dd><%= record.deliveryOrder?.doGrnNumber || "Missing" %></dd></div>
+          <div><dt>Amount Payable</dt><dd>$<%= Number(record.amountPayable || 0).toFixed(2) %></dd></div>
+          <div><dt>Match Status</dt><dd><span class="status <%= record.matching.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.matching.status %></span></dd></div>
+          <div><dt>Validation Status</dt><dd><span class="status <%= record.validation.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.validation.status %></span></dd></div>
+          <div><dt>Discrepancies</dt><dd><%= record.unresolvedDiscrepancies.length %></dd></div>
+        </dl>
+
+        <% if (!record.canApprovePayment) { %>
+          <div class="notice">Payment cannot proceed because documents do not match or data is invalid.</div>
+        <% } %>
+
+        <div class="approval-actions">
+          <form action="/payment-approval/<%= record.id %>/approve" method="POST">
+            <button type="submit" <%= record.canApprovePayment ? "" : "disabled" %>>Approve</button>
+          </form>
+          <form action="/payment-approval/<%= record.id %>/process" method="POST">
+            <button type="submit" <%= record.paymentStatus === "Approved for Payment" ? "" : "disabled" %>>Processing</button>
+          </form>
+          <form action="/payment-simulation/<%= record.id %>/pay" method="POST">
+            <button type="submit" <%= record.paymentStatus === "Approved for Payment" || record.paymentStatus === "Payment Processing" ? "" : "disabled" %>>Mark Paid</button>
+          </form>
+          <form action="/payment-approval/<%= record.id %>/reject" method="POST">
+            <button class="danger-button" type="submit">Reject</button>
+          </form>
+        </div>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

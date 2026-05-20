@@ -3,18 +3,39 @@ const multer = require("multer");
 const path = require("path");
 
 const {
-  addDocumentSet,
-  getDashboardStats,
-  getDocumentSets,
+  approvePayment,
+  createUploadRecord,
+  fieldsToCompare,
+  getAllDiscrepancies,
+  getPaymentList,
+  getRecord,
+  getRecords,
   getReportRows,
+  getStats,
+  paymentStatuses,
+  rejectPayment,
+  saveCorrectedData,
+  setPaymentStatus,
+  simulatePayment,
 } = require("../models/supplierpayment");
 
 const router = express.Router();
 
-// Uploaded files are kept locally so the project is easy to demo in class.
+// multer saves uploaded Excel files inside the uploads folder.
 const upload = multer({
   dest: path.join(__dirname, "..", "uploads"),
 });
+
+function findRecordOrRedirect(req, res) {
+  const record = getRecord(req.params.id);
+
+  if (!record) {
+    res.redirect("/records");
+    return null;
+  }
+
+  return record;
+}
 
 router.get("/", (req, res) => {
   res.redirect("/dashboard");
@@ -24,8 +45,8 @@ router.get("/dashboard", (req, res) => {
   res.render("dashboard", {
     pageTitle: "Dashboard",
     activePage: "dashboard",
-    stats: getDashboardStats(),
-    recentSets: getDocumentSets().slice(0, 5),
+    stats: getStats(),
+    records: getRecords().slice(0, 6),
   });
 });
 
@@ -33,7 +54,6 @@ router.get("/upload", (req, res) => {
   res.render("upload", {
     pageTitle: "Upload Documents",
     activePage: "upload",
-    uploaded: req.query.uploaded === "true",
   });
 });
 
@@ -41,37 +61,53 @@ router.post(
   "/upload",
   upload.fields([
     { name: "poFile", maxCount: 1 },
-    { name: "soFile", maxCount: 1 },
+    { name: "doGrnFile", maxCount: 1 },
     { name: "invoiceFile", maxCount: 1 },
   ]),
   (req, res) => {
-    // This simulates document extraction until OCR/PDF reading is added later.
-    addDocumentSet({
-      supplierName: req.body.supplierName,
-      poNumber: req.body.poNumber,
-      soNumber: req.body.soNumber,
-      invoiceNumber: req.body.invoiceNumber,
-      itemName: req.body.itemName,
-      quantity: req.body.quantity,
-      unitPrice: req.body.unitPrice,
-      totalAmount: req.body.totalAmount,
-      date: req.body.date,
-      uploadedFiles: {
-        po: req.files.poFile?.[0]?.originalname || "No PO file uploaded",
-        so: req.files.soFile?.[0]?.originalname || "No SO file uploaded",
-        invoice: req.files.invoiceFile?.[0]?.originalname || "No invoice file uploaded",
-      },
-    });
-
-    res.redirect("/upload?uploaded=true");
+    const recordId = createUploadRecord(req.files || {});
+    res.redirect(`/extract/${recordId}`);
   }
 );
 
-router.get("/records", (req, res) => {
+router.get("/extracted-data", (req, res) => {
   res.render("records", {
-    pageTitle: "Document Records",
-    activePage: "records",
-    documentSets: getDocumentSets(),
+    pageTitle: "Extracted Data Review",
+    activePage: "review",
+    records: getRecords(),
+  });
+});
+
+router.get("/extract/:id", (req, res) => {
+  const record = findRecordOrRedirect(req, res);
+
+  if (!record) {
+    return;
+  }
+
+  res.render("extract-review", {
+    pageTitle: "Extracted Data Review",
+    activePage: "review",
+    record,
+    saved: req.query.saved === "true",
+  });
+});
+
+router.post("/extract/:id/save", (req, res) => {
+  saveCorrectedData(req.params.id, req.body);
+  res.redirect(`/validate-data?record=${req.params.id}`);
+});
+
+router.get("/records", (req, res) => {
+  res.redirect("/extracted-data");
+});
+
+router.get("/validate-data", (req, res) => {
+  res.render("validate-data", {
+    pageTitle: "Validate Data",
+    activePage: "validate",
+    records: getRecords(),
+    selectedRecordId: req.query.record,
   });
 });
 
@@ -79,7 +115,81 @@ router.get("/matching-results", (req, res) => {
   res.render("matching-results", {
     pageTitle: "Matching Results",
     activePage: "matching",
-    documentSets: getDocumentSets(),
+    records: getRecords(),
+    fieldsToCompare,
+  });
+});
+
+router.get("/payment-approval", (req, res) => {
+  res.render("payment-approval", {
+    pageTitle: "Payment Approval",
+    activePage: "approval",
+    records: getRecords(),
+    paymentList: getPaymentList(),
+  });
+});
+
+router.post("/payment-approval/:id/approve", (req, res) => {
+  const record = findRecordOrRedirect(req, res);
+
+  if (!record) {
+    return;
+  }
+
+  approvePayment(req.params.id);
+
+  res.redirect("/payment-approval");
+});
+
+router.post("/payment-approval/:id/reject", (req, res) => {
+  rejectPayment(req.params.id);
+  res.redirect("/payment-approval");
+});
+
+router.post("/payment-approval/:id/process", (req, res) => {
+  const record = findRecordOrRedirect(req, res);
+
+  if (!record) {
+    return;
+  }
+
+  if (record.paymentStatus === paymentStatuses.approved) {
+    setPaymentStatus(req.params.id, paymentStatuses.processing);
+  }
+
+  res.redirect("/payment-approval");
+});
+
+router.get("/payment-simulation", (req, res) => {
+  res.render("payment-simulation", {
+    pageTitle: "Payment Simulation",
+    activePage: "simulation",
+    records: getRecords(),
+  });
+});
+
+router.post("/payment-simulation/:id/pay", (req, res) => {
+  const record = simulatePayment(req.params.id, req.body.paymentMethod);
+
+  if (!record || !record.payment) {
+    res.redirect("/payment-simulation");
+    return;
+  }
+
+  res.redirect(`/receipt/${record.id}`);
+});
+
+router.get("/receipt/:id", (req, res) => {
+  const record = findRecordOrRedirect(req, res);
+
+  if (!record) {
+    return;
+  }
+
+  res.render("receipt", {
+    pageTitle: "Receipt",
+    activePage: "simulation",
+    record,
   });
 });
 
@@ -87,8 +197,9 @@ router.get("/reports", (req, res) => {
   res.render("reports", {
     pageTitle: "Reports",
     activePage: "reports",
-    stats: getDashboardStats(),
+    stats: getStats(),
     rows: getReportRows(),
+    discrepancies: getAllDiscrepancies(),
   });
 });
 
