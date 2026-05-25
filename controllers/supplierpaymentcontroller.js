@@ -27,8 +27,14 @@ const upload = multer({
   dest: path.join(__dirname, "..", "uploads"),
 });
 
-function findRecordOrRedirect(req, res) {
-  const record = getRecord(req.params.id);
+function asyncRoute(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+async function findRecordOrRedirect(req, res) {
+  const record = await getRecord(req.params.id);
 
   if (!record) {
     res.redirect("/records");
@@ -42,19 +48,23 @@ router.get("/", (req, res) => {
   res.redirect("/dashboard");
 });
 
-router.get("/dashboard", (req, res) => {
+router.get("/dashboard", asyncRoute(async (req, res) => {
+  const [stats, records] = await Promise.all([getStats(), getRecords()]);
+
   res.render("dashboard", {
     pageTitle: "Dashboard",
     activePage: "dashboard",
-    stats: getStats(),
-    records: getRecords().slice(0, 6),
+    stats,
+    records: records.slice(0, 6),
   });
-});
+}));
 
 router.get("/upload", (req, res) => {
   res.render("upload", {
     pageTitle: "Upload Documents",
     activePage: "upload",
+    successMessage: req.query.uploaded === "true" ? "Upload processed successfully." : "",
+    errorMessage: "",
   });
 });
 
@@ -65,22 +75,32 @@ router.post(
     { name: "doGrnFile", maxCount: 1 },
     { name: "invoiceFile", maxCount: 1 },
   ]),
-  (req, res) => {
-    const recordId = createUploadRecord(req.files || {});
-    res.redirect(`/extract/${recordId}`);
-  }
+  asyncRoute(async (req, res) => {
+    try {
+      const result = await createUploadRecord(req.files || {});
+      const supplierCreatedQuery = result.supplierAutoCreated ? "?supplierCreated=true" : "";
+      res.redirect(`/extract/${result.recordId}${supplierCreatedQuery}`);
+    } catch (error) {
+      res.status(400).render("upload", {
+        pageTitle: "Upload Documents",
+        activePage: "upload",
+        successMessage: "",
+        errorMessage: error.message || "Upload could not be processed. Please check the Excel files and try again.",
+      });
+    }
+  })
 );
 
-router.get("/extracted-data", (req, res) => {
+router.get("/extracted-data", asyncRoute(async (req, res) => {
   res.render("records", {
     pageTitle: "Extracted Data Review",
     activePage: "review",
-    records: getRecords(),
+    records: await getRecords(),
   });
-});
+}));
 
-router.get("/extract/:id", (req, res) => {
-  const record = findRecordOrRedirect(req, res);
+router.get("/extract/:id", asyncRoute(async (req, res) => {
+  const record = await findRecordOrRedirect(req, res);
 
   if (!record) {
     return;
@@ -91,38 +111,41 @@ router.get("/extract/:id", (req, res) => {
     activePage: "review",
     record,
     saved: req.query.saved === "true",
+    supplierCreated: req.query.supplierCreated === "true",
   });
-});
+}));
 
-router.post("/extract/:id/save", (req, res) => {
-  saveCorrectedData(req.params.id, req.body);
-  res.redirect(`/validate-data?record=${req.params.id}`);
-});
+router.post("/extract/:id/save", asyncRoute(async (req, res) => {
+  const result = await saveCorrectedData(req.params.id, req.body);
+  const supplierCreatedQuery = result.supplierAutoCreated ? "&supplierCreated=true" : "";
+  res.redirect(`/validate-data?record=${result.recordId}${supplierCreatedQuery}`);
+}));
 
 router.get("/records", (req, res) => {
   res.redirect("/extracted-data");
 });
 
-router.get("/validate-data", (req, res) => {
+router.get("/validate-data", asyncRoute(async (req, res) => {
   res.render("validate-data", {
     pageTitle: "Validate Data",
     activePage: "validate",
-    records: getRecords(),
+    records: await getRecords(),
     selectedRecordId: req.query.record,
+    supplierCreated: req.query.supplierCreated === "true",
   });
-});
+}));
 
-router.get("/matching-results", (req, res) => {
+router.get("/matching-results", asyncRoute(async (req, res) => {
   res.render("matching-results", {
     pageTitle: "Matching Results",
     activePage: "matching",
-    records: getRecords(),
+    records: await getRecords(),
     fieldsToCompare,
   });
-});
+}));
 
-router.get("/payment-approval", (req, res) => {
-  const records = getRecords();
+router.get("/payment-approval", asyncRoute(async (req, res) => {
+  const records = await getRecords();
   const statusGroups = {
     pending: records.filter((record) => record.paymentStatus === paymentStatuses.pending),
     approved: records.filter((record) => record.paymentStatus === paymentStatuses.approved),
@@ -142,59 +165,59 @@ router.get("/payment-approval", (req, res) => {
     pageTitle: "Payment Approval",
     activePage: "approval",
     records,
-    paymentList: getPaymentList(),
+    paymentList: await getPaymentList(),
     statusGroups,
     currentFilter: req.query.filter || "all",
     success: req.query.updated === "true",
   });
-});
+}));
 
-router.post("/payment-approval/:id/approve", (req, res) => {
-  const record = findRecordOrRedirect(req, res);
+router.post("/payment-approval/:id/approve", asyncRoute(async (req, res) => {
+  const record = await findRecordOrRedirect(req, res);
 
   if (!record) {
     return;
   }
 
-  approvePayment(req.params.id);
+  await approvePayment(req.params.id);
 
   res.redirect("/payment-approval?updated=true");
-});
+}));
 
-router.post("/payment-approval/:id/reject", (req, res) => {
-  rejectPayment(req.params.id);
+router.post("/payment-approval/:id/reject", asyncRoute(async (req, res) => {
+  await rejectPayment(req.params.id);
   res.redirect("/payment-approval?updated=true&filter=rejected");
-});
+}));
 
-router.post("/payment-approval/:id/process", (req, res) => {
-  const record = findRecordOrRedirect(req, res);
+router.post("/payment-approval/:id/process", asyncRoute(async (req, res) => {
+  const record = await findRecordOrRedirect(req, res);
 
   if (!record) {
     return;
   }
 
   if (record.paymentStatus === paymentStatuses.approved) {
-    setPaymentStatus(req.params.id, paymentStatuses.processing);
+    await setPaymentStatus(req.params.id, paymentStatuses.processing);
   }
 
   res.redirect("/payment-approval?updated=true&filter=processing");
-});
+}));
 
-router.post("/payment-approval/:id/paid", (req, res) => {
-  markPaymentPaid(req.params.id, req.body.paymentMethod);
+router.post("/payment-approval/:id/paid", asyncRoute(async (req, res) => {
+  await markPaymentPaid(req.params.id, req.body.paymentMethod);
   res.redirect("/payment-approval?updated=true&filter=paid");
-});
+}));
 
-router.get("/payment-simulation", (req, res) => {
+router.get("/payment-simulation", asyncRoute(async (req, res) => {
   res.render("payment-simulation", {
     pageTitle: "Payment Simulation",
     activePage: "simulation",
-    records: getRecords(),
+    records: await getRecords(),
   });
-});
+}));
 
-router.post("/payment-simulation/:id/pay", (req, res) => {
-  const record = simulatePayment(req.params.id, req.body.paymentMethod);
+router.post("/payment-simulation/:id/pay", asyncRoute(async (req, res) => {
+  const record = await simulatePayment(req.params.id, req.body.paymentMethod);
 
   if (!record || !record.payment) {
     res.redirect("/payment-simulation");
@@ -202,10 +225,10 @@ router.post("/payment-simulation/:id/pay", (req, res) => {
   }
 
   res.redirect(`/receipt/${record.id}`);
-});
+}));
 
-router.get("/receipt/:id", (req, res) => {
-  const record = findRecordOrRedirect(req, res);
+router.get("/receipt/:id", asyncRoute(async (req, res) => {
+  const record = await findRecordOrRedirect(req, res);
 
   if (!record) {
     return;
@@ -216,16 +239,18 @@ router.get("/receipt/:id", (req, res) => {
     activePage: "simulation",
     record,
   });
-});
+}));
 
-router.get("/reports", (req, res) => {
+router.get("/reports", asyncRoute(async (req, res) => {
+  const [stats, rows, discrepancies] = await Promise.all([getStats(), getReportRows(), getAllDiscrepancies()]);
+
   res.render("reports", {
     pageTitle: "Reports",
     activePage: "reports",
-    stats: getStats(),
-    rows: getReportRows(),
-    discrepancies: getAllDiscrepancies(),
+    stats,
+    rows,
+    discrepancies,
   });
-});
+}));
 
 module.exports = router;

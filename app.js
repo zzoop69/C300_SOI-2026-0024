@@ -7,7 +7,7 @@ const { ensureDataFile } = require("./models/supplierpayment");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Create the JSON data file and upload folder when the project first runs.
+// Create the upload folder when the project first runs.
 ensureDataFile();
 
 app.set("view engine", "ejs");
@@ -19,7 +19,15 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/", supplierPaymentRoutes);
 
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.status(500).render("error", {
+    pageTitle: "Something Went Wrong",
+    activePage: "",
+    errorMessage: error.message || "Database integration error",
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Autonomous Supplier Payment Process is running at http://localhost:${PORT}`);
 });
-n

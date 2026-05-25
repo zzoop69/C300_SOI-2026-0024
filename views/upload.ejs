@@ -1,5 +1,13 @@
 <%- include("partials/header") %>
 
+<% if (successMessage) { %>
+  <div class="notice success-notice"><%= successMessage %></div>
+<% } %>
+
+<% if (errorMessage) { %>
+  <div class="notice"><%= errorMessage %></div>
+<% } %>
+
 <section class="panel">
   <div class="section-heading">
     <div>

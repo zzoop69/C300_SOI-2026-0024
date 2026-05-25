@@ -1,10 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
+const db = require("../db");
 
-const dataDirectory = path.join(__dirname, "..", "data");
 const uploadsDirectory = path.join(__dirname, "..", "uploads");
-const dataFile = path.join(dataDirectory, "supplier-payments.json");
 
 const paymentStatuses = {
   pending: "Pending Approval",
@@ -38,28 +37,7 @@ const comparisonLabels = {
 };
 
 function ensureDataFile() {
-  fs.mkdirSync(dataDirectory, { recursive: true });
   fs.mkdirSync(uploadsDirectory, { recursive: true });
-
-  if (!fs.existsSync(dataFile)) {
-    fs.writeFileSync(dataFile, JSON.stringify([], null, 2));
-  }
-}
-
-function readRecords() {
-  ensureDataFile();
-
-  try {
-    const records = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-    return Array.isArray(records) ? records : [];
-  } catch (error) {
-    return [];
-  }
-}
-
-function saveRecords(records) {
-  ensureDataFile();
-  fs.writeFileSync(dataFile, JSON.stringify(records, null, 2));
 }
 
 function createUploadedFile(file) {
@@ -109,10 +87,6 @@ function emptyInvoice() {
     totalAmount: "",
     documentDate: "",
   };
-}
-
-function getNextId(records) {
-  return records.length ? Math.max(...records.map((record) => Number(record.id) || 0)) + 1 : 1;
 }
 
 function normaliseHeader(header) {
@@ -181,13 +155,9 @@ function readFirstExcelRow(file) {
     return null;
   }
 
-  // Excel extraction: uploaded PO, DO/GRN, and invoice files are read with xlsx.
-  // The first worksheet and first data row are used as the extracted document set.
   const workbook = XLSX.readFile(file.path, { cellDates: true });
-  const firstSheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[firstSheetName];
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
   return rows[0] || null;
 }
 
@@ -213,7 +183,6 @@ function getColumn(row, possibleNames) {
 
 function extractPurchaseOrder(file) {
   const row = readFirstExcelRow(file);
-
   if (!row) {
     return emptyPurchaseOrder();
   }
@@ -231,7 +200,6 @@ function extractPurchaseOrder(file) {
 
 function extractDeliveryOrder(file) {
   const row = readFirstExcelRow(file);
-
   if (!row) {
     return emptyDeliveryOrder();
   }
@@ -248,7 +216,6 @@ function extractDeliveryOrder(file) {
 
 function extractInvoice(file) {
   const row = readFirstExcelRow(file);
-
   if (!row) {
     return emptyInvoice();
   }
@@ -265,120 +232,193 @@ function extractInvoice(file) {
   };
 }
 
-function migrateLegacyRecord(record) {
-  if (record.purchaseOrder?.quantityOrdered || record.deliveryOrder || record.invoice?.quantityBilled) {
-    return {
-      ...record,
-      deliveryOrderFile: record.deliveryOrderFile || record.doGrnFile || null,
-      deliveryOrder: record.deliveryOrder || emptyDeliveryOrder(),
-    };
+function valuesMatch(firstValue, secondValue) {
+  const firstNumber = toNumber(firstValue);
+  const secondNumber = toNumber(secondValue);
+  const firstText = String(firstValue || "").trim();
+  const secondText = String(secondValue || "").trim();
+
+  if (firstText === "" || secondText === "") {
+    return false;
   }
 
-  const purchaseOrder = record.purchaseOrder || {};
-  const invoice = record.invoice || {};
+  if (!Number.isNaN(firstNumber) && !Number.isNaN(secondNumber)) {
+    return Math.abs(firstNumber - secondNumber) <= 0.01;
+  }
 
+  return firstText.toLowerCase() === secondText.toLowerCase();
+}
+
+function addDays(dateValue, days) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(date.getDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+}
+
+function eomPlusDays(dateValue, days) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  endOfMonth.setDate(endOfMonth.getDate() + Number(days || 0));
+  return endOfMonth.toISOString().slice(0, 10);
+}
+
+function sqlDate(value) {
+  return formatDate(value) || new Date().toISOString().slice(0, 10);
+}
+
+function makeItemId(value) {
+  const cleaned = String(value || "ITEM")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 16);
+  return cleaned || "ITEM";
+}
+
+function dbPaymentStatusToUi(status, exceptionFlag) {
+  if (status === "PAID") {
+    return paymentStatuses.paid;
+  }
+
+  if (status === "READY" && exceptionFlag !== "Y") {
+    return paymentStatuses.approved;
+  }
+
+  return paymentStatuses.held;
+}
+
+function uiPaymentStatusToDb(status) {
+  if (status === paymentStatuses.paid) {
+    return "PAID";
+  }
+
+  if (status === paymentStatuses.approved || status === paymentStatuses.processing) {
+    return "READY";
+  }
+
+  return "HOLD";
+}
+
+async function queryRecords(whereClause = "", values = []) {
+  const [rows] = await db.execute(
+    `
+      SELECT
+        si.invoice_id,
+        si.supplier_id,
+        si.po_id,
+        si.do_id,
+        si.invoice_date,
+        si.item_id AS invoice_item_id,
+        si.qty_invoiced,
+        si.unit_price AS invoice_unit_price,
+        si.tax_amount,
+        si.total_amount AS invoice_total_amount,
+        si.currency AS invoice_currency,
+        sm.supplier_name,
+        sm.active_flag,
+        pt.days AS payment_term_days,
+        pt.type AS payment_term_type,
+        po.po_date,
+        po.description AS po_description,
+        po.qty_ordered,
+        po.unit_price AS po_unit_price,
+        po.currency AS po_currency,
+        po.total_amount AS po_total_amount,
+        dox.delivery_date,
+        dox.qty_delivered,
+        pdl.payment_due_id,
+        pdl.due_date,
+        pdl.amount_due,
+        pdl.payment_status,
+        pdl.exception_flag
+      FROM supplier_invoices si
+      INNER JOIN supplier_master sm ON sm.supplier_id = si.supplier_id
+      INNER JOIN payment_terms pt ON pt.term_code = sm.payment_term_code
+      INNER JOIN purchase_orders po ON po.po_id = si.po_id
+      LEFT JOIN delivery_orders dox ON dox.do_id = si.do_id
+      LEFT JOIN payment_due_list pdl ON pdl.invoice_id = si.invoice_id
+      ${whereClause}
+      ORDER BY si.invoice_date DESC, si.invoice_id DESC
+    `,
+    values
+  );
+
+  const invoiceIds = rows.map((row) => row.invoice_id);
+  let exceptionsByInvoice = new Map();
+
+  if (invoiceIds.length) {
+    const placeholders = invoiceIds.map(() => "?").join(", ");
+    const [exceptions] = await db.execute(
+      `
+        SELECT exception_id, invoice_id, exception_type, description, created_at
+        FROM matching_exceptions
+        WHERE invoice_id IN (${placeholders})
+        ORDER BY exception_id ASC
+      `,
+      invoiceIds
+    );
+
+    exceptionsByInvoice = exceptions.reduce((map, exception) => {
+      const current = map.get(exception.invoice_id) || [];
+      current.push(exception);
+      map.set(exception.invoice_id, current);
+      return map;
+    }, new Map());
+  }
+
+  return rows.map((row) => decorateRecord(rowToRecord(row, exceptionsByInvoice.get(row.invoice_id) || [])));
+}
+
+function rowToRecord(row, exceptions) {
   return {
-    ...record,
-    deliveryOrderFile: record.deliveryOrderFile || null,
+    id: row.invoice_id,
+    createdAt: row.invoice_date,
+    purchaseOrderFile: { originalName: `${row.po_id}.sql`, storedName: row.po_id },
+    deliveryOrderFile: row.do_id ? { originalName: `${row.do_id}.sql`, storedName: row.do_id } : null,
+    invoiceFile: { originalName: `${row.invoice_id}.sql`, storedName: row.invoice_id },
+    supplierId: row.supplier_id,
     purchaseOrder: {
-      supplierName: purchaseOrder.supplierName || "",
-      poNumber: purchaseOrder.poNumber || "",
-      itemDescription: purchaseOrder.itemDescription || purchaseOrder.description || purchaseOrder.itemName || "",
-      quantityOrdered: purchaseOrder.quantityOrdered || purchaseOrder.quantity || "",
-      unitPrice: purchaseOrder.unitPrice || "",
-      totalAmount: purchaseOrder.totalAmount || purchaseOrder.totalPrice || "",
-      documentDate: purchaseOrder.documentDate || purchaseOrder.orderDate || "",
-    },
-    deliveryOrder: record.deliveryOrder || emptyDeliveryOrder(),
-    invoice: {
-      supplierName: invoice.supplierName || "",
-      poNumber: invoice.poNumber || invoice.orderNumber || "",
-      invoiceNumber: invoice.invoiceNumber || "",
-      itemDescription: invoice.itemDescription || invoice.description || invoice.itemName || "",
-      quantityBilled: invoice.quantityBilled || invoice.quantity || "",
-      unitPrice: invoice.unitPrice || "",
-      totalAmount: invoice.totalAmount || invoice.itemTotal || invoice.subtotal || "",
-      documentDate: invoice.documentDate || invoice.orderDate || "",
-    },
-  };
-}
-
-function createUploadRecord(files) {
-  const records = readRecords();
-  const poFile = createUploadedFile(files.poFile?.[0]);
-  const deliveryOrderFile = createUploadedFile(files.doGrnFile?.[0]);
-  const invoiceFile = createUploadedFile(files.invoiceFile?.[0]);
-
-  const record = {
-    id: getNextId(records),
-    createdAt: new Date().toISOString(),
-    purchaseOrderFile: poFile,
-    deliveryOrderFile,
-    invoiceFile,
-    purchaseOrder: extractPurchaseOrder(poFile),
-    deliveryOrder: extractDeliveryOrder(deliveryOrderFile),
-    invoice: extractInvoice(invoiceFile),
-    extractionStatus: poFile && deliveryOrderFile && invoiceFile ? "Extracted" : "Needs Review",
-    paymentStatus: paymentStatuses.pending,
-    approvalStatus: "Not Approved",
-    payment: null,
-  };
-
-  records.push(record);
-  saveRecords(records);
-  return record.id;
-}
-
-function getRawRecord(id) {
-  const record = readRecords().find((savedRecord) => Number(savedRecord.id) === Number(id));
-  return record ? migrateLegacyRecord(record) : null;
-}
-
-function updateRecord(id, updater) {
-  const records = readRecords();
-  const index = records.findIndex((record) => Number(record.id) === Number(id));
-
-  if (index === -1) {
-    return null;
-  }
-
-  records[index] = updater(migrateLegacyRecord(records[index]));
-  saveRecords(records);
-  return records[index];
-}
-
-function saveCorrectedData(id, formData) {
-  return updateRecord(id, (record) => ({
-    ...record,
-    purchaseOrder: {
-      supplierName: formData.poSupplierName || "",
-      poNumber: formData.poNumber || "",
-      itemDescription: formData.poItemDescription || "",
-      quantityOrdered: formData.poQuantityOrdered || "",
-      unitPrice: formData.poUnitPrice || "",
-      totalAmount: formData.poTotalAmount || "",
-      documentDate: formData.poDocumentDate || "",
+      supplierName: row.supplier_name,
+      poNumber: row.po_id,
+      itemDescription: row.po_description,
+      quantityOrdered: normaliseValue(row.qty_ordered),
+      unitPrice: normaliseValue(row.po_unit_price),
+      totalAmount: normaliseValue(row.po_total_amount),
+      documentDate: row.po_date,
     },
     deliveryOrder: {
-      supplierName: formData.doSupplierName || "",
-      poNumber: formData.doPoNumber || "",
-      doGrnNumber: formData.doGrnNumber || "",
-      itemDescription: formData.doItemDescription || "",
-      quantityReceived: formData.doQuantityReceived || "",
-      documentDate: formData.doDocumentDate || "",
+      supplierName: row.supplier_name,
+      poNumber: row.po_id,
+      doGrnNumber: row.do_id || "",
+      itemDescription: row.po_description,
+      quantityReceived: normaliseValue(row.qty_delivered),
+      documentDate: row.delivery_date || "",
     },
     invoice: {
-      supplierName: formData.invoiceSupplierName || "",
-      poNumber: formData.invoicePoNumber || "",
-      invoiceNumber: formData.invoiceNumber || "",
-      itemDescription: formData.invoiceItemDescription || "",
-      quantityBilled: formData.invoiceQuantityBilled || "",
-      unitPrice: formData.invoiceUnitPrice || "",
-      totalAmount: formData.invoiceTotalAmount || "",
-      documentDate: formData.invoiceDocumentDate || "",
+      supplierName: row.supplier_name,
+      poNumber: row.po_id,
+      invoiceNumber: row.invoice_id,
+      itemDescription: row.po_description,
+      quantityBilled: normaliseValue(row.qty_invoiced),
+      unitPrice: normaliseValue(row.invoice_unit_price),
+      totalAmount: normaliseValue(row.invoice_total_amount),
+      documentDate: row.invoice_date,
     },
-    extractionStatus: "Reviewed",
-  }));
+    dbPaymentStatus: row.payment_status || "HOLD",
+    dbExceptionFlag: row.exception_flag || (exceptions.length ? "Y" : "N"),
+    extractionStatus: row.do_id ? "Extracted" : "Needs Review",
+    paymentStatus: dbPaymentStatusToUi(row.payment_status, row.exception_flag || (exceptions.length ? "Y" : "N")),
+    approvalStatus: row.payment_status === "READY" || row.payment_status === "PAID" ? "Approved" : "Not Approved",
+    payment: row.payment_status === "PAID"
+      ? {
+          transactionId: `PAY-${row.payment_due_id || row.invoice_id}`,
+          method: "Demo Bank Transfer",
+          amountPaid: row.amount_due || row.invoice_total_amount,
+          paidAt: row.due_date,
+          status: paymentStatuses.paid,
+        }
+      : null,
+    databaseExceptions: exceptions,
+  };
 }
 
 function pushIssue(issues, invalidFields, field, message) {
@@ -401,14 +441,6 @@ function calculateValidation(record) {
   const po = record.purchaseOrder || emptyPurchaseOrder();
   const deliveryOrder = record.deliveryOrder || emptyDeliveryOrder();
   const invoice = record.invoice || emptyInvoice();
-
-  if (!record.purchaseOrderFile || !record.deliveryOrderFile || !record.invoiceFile) {
-    return {
-      status: "Needs Review",
-      invalidFields,
-      messages: ["PO, DO/GRN, and Supplier Invoice files are all required."],
-    };
-  }
 
   [
     ["po.supplierName", po.supplierName, "PO supplier name is required."],
@@ -463,23 +495,6 @@ function calculateValidation(record) {
   };
 }
 
-function valuesMatch(firstValue, secondValue) {
-  const firstNumber = toNumber(firstValue);
-  const secondNumber = toNumber(secondValue);
-  const firstText = String(firstValue || "").trim();
-  const secondText = String(secondValue || "").trim();
-
-  if (firstText === "" || secondText === "") {
-    return false;
-  }
-
-  if (!Number.isNaN(firstNumber) && !Number.isNaN(secondNumber)) {
-    return Math.abs(firstNumber - secondNumber) <= 0.01;
-  }
-
-  return firstText.toLowerCase() === secondText.toLowerCase();
-}
-
 function discrepancyAction(type) {
   if (type === "Missing document") {
     return "Request missing document";
@@ -522,17 +537,8 @@ function calculateDiscrepancies(record) {
   const invoice = record.invoice || emptyInvoice();
   const discrepancies = [];
 
-  // Discrepancy logic: every row is created from uploaded and saved document data.
-  if (!record.purchaseOrderFile) {
-    discrepancies.push(makeDiscrepancy(record, "Purchase Order", "Missing document", "", "", ""));
-  }
-
   if (!record.deliveryOrderFile) {
     discrepancies.push(makeDiscrepancy(record, "DO/GRN", "Missing document", "", "", ""));
-  }
-
-  if (!record.invoiceFile) {
-    discrepancies.push(makeDiscrepancy(record, "Supplier Invoice", "Missing document", "", "", ""));
   }
 
   if (!valuesMatch(po.supplierName, invoice.supplierName) || !valuesMatch(po.supplierName, deliveryOrder.supplierName)) {
@@ -566,6 +572,10 @@ function calculateDiscrepancies(record) {
   if (!valuesMatch(po.totalAmount, invoice.totalAmount)) {
     discrepancies.push(makeDiscrepancy(record, "Total Amount", "Amount mismatch", po.totalAmount, "", invoice.totalAmount));
   }
+
+  (record.databaseExceptions || []).forEach((exception) => {
+    discrepancies.push(makeDiscrepancy(record, exception.description, exception.exception_type, "", "", ""));
+  });
 
   return discrepancies;
 }
@@ -667,152 +677,306 @@ function calculateMatching(record) {
 }
 
 function decorateRecord(record) {
-  const migratedRecord = migrateLegacyRecord(record);
-  const validation = calculateValidation(migratedRecord);
-  const matching = calculateMatching(migratedRecord);
-  const discrepancies = calculateDiscrepancies(migratedRecord);
+  const validation = calculateValidation(record);
+  const matching = calculateMatching(record);
+  const discrepancies = calculateDiscrepancies(record);
   const unresolvedDiscrepancies = discrepancies.filter((discrepancy) => !discrepancy.resolved);
   const canApprovePayment = matching.status === "Matched" && validation.status === "Valid" && unresolvedDiscrepancies.length === 0;
 
   return {
-    ...migratedRecord,
+    ...record,
     validation,
     matching,
     discrepancies,
     unresolvedDiscrepancies,
     canApprovePayment,
-    approvalStatus: migratedRecord.approvalStatus || (migratedRecord.paymentStatus === paymentStatuses.approved ? "Approved" : "Not Approved"),
-    amountPayable: migratedRecord.invoice?.totalAmount || migratedRecord.purchaseOrder?.totalAmount || "0",
+    amountPayable: record.invoice?.totalAmount || record.purchaseOrder?.totalAmount || "0",
   };
 }
 
-function getRecords() {
-  return readRecords()
-    .map(decorateRecord)
-    .sort((first, second) => Number(second.id) - Number(first.id));
+async function getRecords() {
+  return queryRecords();
 }
 
-function getRecord(id) {
-  const record = getRawRecord(id);
-  return record ? decorateRecord(record) : null;
+async function getRecord(id) {
+  const records = await queryRecords("WHERE si.invoice_id = ?", [id]);
+  return records[0] || null;
 }
 
-function setPaymentStatus(id, paymentStatus) {
-  return updateRecord(id, (record) => ({
-    ...record,
-    paymentStatus,
-    approvalStatus:
-      paymentStatus === paymentStatuses.approved || paymentStatus === paymentStatuses.processing || paymentStatus === paymentStatuses.paid
-        ? "Approved"
-        : record.approvalStatus || "Not Approved",
-    paymentUpdatedAt: new Date().toISOString(),
-  }));
+function makeSupplierId() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `SUP${timestamp}${random}`.slice(0, 20);
 }
 
-function approvePayment(id) {
-  const record = getRecord(id);
+async function findSupplierByNameOrId(connection, supplierName) {
+  const [rows] = await connection.execute(
+    `
+      SELECT sm.supplier_id, sm.supplier_name, sm.currency, pt.days, pt.type
+      FROM supplier_master sm
+      INNER JOIN payment_terms pt ON pt.term_code = sm.payment_term_code
+      WHERE sm.supplier_name = ? OR sm.supplier_id = ?
+      LIMIT 1
+    `,
+    [supplierName, supplierName]
+  );
+  return rows[0] || null;
+}
+
+async function findOrCreateSupplier(connection, supplierName) {
+  const cleanedSupplierName = normaliseValue(supplierName);
+
+  if (!cleanedSupplierName) {
+    throw new Error("Supplier Name is required before saving uploaded documents.");
+  }
+
+  const existingSupplier = await findSupplierByNameOrId(connection, cleanedSupplierName);
+
+  if (existingSupplier) {
+    return {
+      supplier: existingSupplier,
+      created: false,
+    };
+  }
+
+  const supplierId = makeSupplierId();
+
+  await connection.execute(
+    `
+      INSERT INTO supplier_master
+        (supplier_id, supplier_name, currency, payment_term_code, credit_limit, tax_id, bank_account, bank_name, active_flag)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [supplierId, cleanedSupplierName, "SGD", "NET30", null, null, null, null, "Y"]
+  );
+
+  const supplier = await findSupplierByNameOrId(connection, cleanedSupplierName);
+
+  return {
+    supplier,
+    created: true,
+  };
+}
+
+async function saveDocumentSet(record) {
+  const po = record.purchaseOrder || emptyPurchaseOrder();
+  const deliveryOrder = record.deliveryOrder || emptyDeliveryOrder();
+  const invoice = record.invoice || emptyInvoice();
+  const poId = po.poNumber || `PO${Date.now()}`;
+  const invoiceId = invoice.invoiceNumber || `INV${Date.now()}`;
+  const doId = deliveryOrder.doGrnNumber || null;
+  const itemId = makeItemId(po.itemDescription || invoice.itemDescription);
+  const poDate = sqlDate(po.documentDate);
+  const invoiceDate = sqlDate(invoice.documentDate);
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const supplierResult = await findOrCreateSupplier(connection, invoice.supplierName || po.supplierName || deliveryOrder.supplierName);
+    const supplier = supplierResult.supplier;
+    const dueDate = supplier.type === "EOM" ? eomPlusDays(invoiceDate, supplier.days) : addDays(invoiceDate, supplier.days);
+
+    await connection.execute(
+      `
+        INSERT INTO purchase_orders
+          (po_id, supplier_id, po_date, item_id, description, qty_ordered, unit_price, currency, total_amount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          supplier_id = VALUES(supplier_id),
+          po_date = VALUES(po_date),
+          item_id = VALUES(item_id),
+          description = VALUES(description),
+          qty_ordered = VALUES(qty_ordered),
+          unit_price = VALUES(unit_price),
+          currency = VALUES(currency),
+          total_amount = VALUES(total_amount)
+      `,
+      [poId, supplier.supplier_id, poDate, itemId, po.itemDescription, money(po.quantityOrdered), money(po.unitPrice), supplier.currency, money(po.totalAmount)]
+    );
+
+    if (doId) {
+      await connection.execute(
+        `
+          INSERT INTO delivery_orders
+            (do_id, po_id, delivery_date, item_id, qty_delivered)
+          VALUES (?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            po_id = VALUES(po_id),
+            delivery_date = VALUES(delivery_date),
+            item_id = VALUES(item_id),
+            qty_delivered = VALUES(qty_delivered)
+        `,
+        [doId, poId, sqlDate(deliveryOrder.documentDate), itemId, money(deliveryOrder.quantityReceived)]
+      );
+    }
+
+    await connection.execute(
+      `
+        INSERT INTO supplier_invoices
+          (invoice_id, supplier_id, po_id, do_id, invoice_date, item_id, qty_invoiced, unit_price, tax_amount, total_amount, currency)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          supplier_id = VALUES(supplier_id),
+          po_id = VALUES(po_id),
+          do_id = VALUES(do_id),
+          invoice_date = VALUES(invoice_date),
+          item_id = VALUES(item_id),
+          qty_invoiced = VALUES(qty_invoiced),
+          unit_price = VALUES(unit_price),
+          tax_amount = VALUES(tax_amount),
+          total_amount = VALUES(total_amount),
+          currency = VALUES(currency)
+      `,
+      [invoiceId, supplier.supplier_id, poId, doId, invoiceDate, itemId, money(invoice.quantityBilled), money(invoice.unitPrice), 0, money(invoice.totalAmount), supplier.currency]
+    );
+
+    const draftRecord = decorateRecord({
+      ...record,
+      id: invoiceId,
+      purchaseOrderFile: record.purchaseOrderFile || { originalName: `${poId}.sql`, storedName: poId },
+      deliveryOrderFile: doId ? record.deliveryOrderFile || { originalName: `${doId}.sql`, storedName: doId } : null,
+      invoiceFile: record.invoiceFile || { originalName: `${invoiceId}.sql`, storedName: invoiceId },
+      databaseExceptions: [],
+    });
+    const exceptionFlag = draftRecord.discrepancies.length ? "Y" : "N";
+    const paymentStatus = draftRecord.canApprovePayment ? "READY" : "HOLD";
+
+    await connection.execute(
+      `
+        INSERT INTO payment_due_list
+          (supplier_id, invoice_id, invoice_date, due_date, amount_due, currency, payment_status, exception_flag)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          supplier_id = VALUES(supplier_id),
+          invoice_date = VALUES(invoice_date),
+          due_date = VALUES(due_date),
+          amount_due = VALUES(amount_due),
+          currency = VALUES(currency),
+          payment_status = VALUES(payment_status),
+          exception_flag = VALUES(exception_flag)
+      `,
+      [supplier.supplier_id, invoiceId, invoiceDate, dueDate, money(invoice.totalAmount), supplier.currency, paymentStatus, exceptionFlag]
+    );
+
+    await connection.execute("DELETE FROM matching_exceptions WHERE invoice_id = ?", [invoiceId]);
+    for (const discrepancy of draftRecord.discrepancies) {
+      await connection.execute(
+        `
+          INSERT INTO matching_exceptions
+            (invoice_id, exception_type, description)
+          VALUES (?, ?, ?)
+        `,
+        [invoiceId, discrepancy.type.toUpperCase().replace(/[^A-Z0-9]+/g, "_").slice(0, 50), discrepancy.field]
+      );
+    }
+
+    await connection.commit();
+    return {
+      recordId: invoiceId,
+      supplierAutoCreated: supplierResult.created,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function createUploadRecord(files) {
+  const poFile = createUploadedFile(files.poFile?.[0]);
+  const deliveryOrderFile = createUploadedFile(files.doGrnFile?.[0]);
+  const invoiceFile = createUploadedFile(files.invoiceFile?.[0]);
+
+  return saveDocumentSet({
+    purchaseOrderFile: poFile,
+    deliveryOrderFile,
+    invoiceFile,
+    purchaseOrder: extractPurchaseOrder(poFile),
+    deliveryOrder: extractDeliveryOrder(deliveryOrderFile),
+    invoice: extractInvoice(invoiceFile),
+  });
+}
+
+async function saveCorrectedData(id, formData) {
+  const existingRecord = await getRecord(id);
+  return saveDocumentSet({
+    ...(existingRecord || {}),
+    purchaseOrder: {
+      supplierName: formData.poSupplierName || "",
+      poNumber: formData.poNumber || "",
+      itemDescription: formData.poItemDescription || "",
+      quantityOrdered: formData.poQuantityOrdered || "",
+      unitPrice: formData.poUnitPrice || "",
+      totalAmount: formData.poTotalAmount || "",
+      documentDate: formData.poDocumentDate || "",
+    },
+    deliveryOrder: {
+      supplierName: formData.doSupplierName || "",
+      poNumber: formData.doPoNumber || "",
+      doGrnNumber: formData.doGrnNumber || "",
+      itemDescription: formData.doItemDescription || "",
+      quantityReceived: formData.doQuantityReceived || "",
+      documentDate: formData.doDocumentDate || "",
+    },
+    invoice: {
+      supplierName: formData.invoiceSupplierName || "",
+      poNumber: formData.invoicePoNumber || "",
+      invoiceNumber: formData.invoiceNumber || id,
+      itemDescription: formData.invoiceItemDescription || "",
+      quantityBilled: formData.invoiceQuantityBilled || "",
+      unitPrice: formData.invoiceUnitPrice || "",
+      totalAmount: formData.invoiceTotalAmount || "",
+      documentDate: formData.invoiceDocumentDate || "",
+    },
+  });
+}
+
+async function setPaymentStatus(id, paymentStatus) {
+  await db.execute(
+    `
+      UPDATE payment_due_list
+      SET payment_status = ?
+      WHERE invoice_id = ?
+    `,
+    [uiPaymentStatusToDb(paymentStatus), id]
+  );
+  return getRecord(id);
+}
+
+async function approvePayment(id) {
+  const record = await getRecord(id);
 
   if (!record || !record.canApprovePayment) {
     return record ? setPaymentStatus(id, paymentStatuses.held) : null;
   }
 
-  return updateRecord(id, (savedRecord) => ({
-    ...savedRecord,
-    paymentStatus: paymentStatuses.approved,
-    approvalStatus: "Approved",
-    approvedAt: new Date().toISOString(),
-    paymentUpdatedAt: new Date().toISOString(),
-  }));
+  return setPaymentStatus(id, paymentStatuses.approved);
 }
 
-function rejectPayment(id) {
-  return updateRecord(id, (record) => ({
-    ...record,
-    paymentStatus: paymentStatuses.rejected,
-    approvalStatus: "Rejected",
-    rejectedAt: new Date().toISOString(),
-    paymentUpdatedAt: new Date().toISOString(),
-  }));
+async function rejectPayment(id) {
+  return setPaymentStatus(id, paymentStatuses.held);
 }
 
-function getNextTransactionId(records) {
-  const year = new Date().getFullYear();
-  const paidCount = records.filter((record) => record.payment?.transactionId).length + 1;
-  return `PAY-${year}-${String(paidCount).padStart(4, "0")}`;
+async function simulatePayment(id) {
+  return setPaymentStatus(id, paymentStatuses.paid);
 }
 
-function simulatePayment(id, paymentMethod = "Demo Bank Transfer") {
-  const records = readRecords();
-  const index = records.findIndex((record) => Number(record.id) === Number(id));
-
-  if (index === -1) {
-    return null;
-  }
-
-  const decorated = decorateRecord(records[index]);
-  if (decorated.paymentStatus !== paymentStatuses.approved && decorated.paymentStatus !== paymentStatuses.processing) {
-    return decorated;
-  }
-
-  // Payment logic: this is only a demo state transition, not a payment gateway.
-  records[index] = {
-    ...migrateLegacyRecord(records[index]),
-    paymentStatus: paymentStatuses.paid,
-    approvalStatus: "Approved",
-    payment: {
-      transactionId: getNextTransactionId(records),
-      method: paymentMethod,
-      amountPaid: decorated.amountPayable,
-      paidAt: new Date().toISOString(),
-      status: paymentStatuses.paid,
-    },
-  };
-
-  saveRecords(records);
-  return decorateRecord(records[index]);
+async function markPaymentPaid(id) {
+  return setPaymentStatus(id, paymentStatuses.paid);
 }
 
-function markPaymentPaid(id, paymentMethod = "Demo Bank Transfer") {
-  const records = readRecords();
-  const index = records.findIndex((record) => Number(record.id) === Number(id));
-
-  if (index === -1) {
-    return null;
-  }
-
-  const decorated = decorateRecord(records[index]);
-  if (decorated.paymentStatus !== paymentStatuses.approved && decorated.paymentStatus !== paymentStatuses.processing) {
-    return decorated;
-  }
-
-  const paidAt = new Date().toISOString();
-  records[index] = {
-    ...migrateLegacyRecord(records[index]),
-    paymentStatus: paymentStatuses.paid,
-    approvalStatus: "Approved",
-    paymentUpdatedAt: paidAt,
-    payment: {
-      transactionId: records[index].payment?.transactionId || getNextTransactionId(records),
-      method: paymentMethod || "Demo Bank Transfer",
-      amountPaid: decorated.amountPayable,
-      paidAt,
-      status: paymentStatuses.paid,
-    },
-  };
-
-  saveRecords(records);
-  return decorateRecord(records[index]);
-}
-
-function getPaymentList() {
-  return getRecords().filter((record) =>
+async function getPaymentList() {
+  const records = await getRecords();
+  return records.filter((record) =>
     record.canApprovePayment &&
-    [paymentStatuses.pending, paymentStatuses.approved, paymentStatuses.processing, paymentStatuses.held].includes(record.paymentStatus)
+    [paymentStatuses.approved, paymentStatuses.held].includes(record.paymentStatus)
   );
 }
 
-function getAllDiscrepancies() {
-  return getRecords().flatMap((record) =>
+async function getAllDiscrepancies() {
+  const records = await getRecords();
+  return records.flatMap((record) =>
     record.discrepancies.map((discrepancy) => ({
       recordId: record.id,
       ...discrepancy,
@@ -820,8 +984,9 @@ function getAllDiscrepancies() {
   );
 }
 
-function getStats() {
-  const records = getRecords();
+async function getStats() {
+  const records = await getRecords();
+  const discrepancies = records.flatMap((record) => record.discrepancies);
   const paidRecords = records.filter((record) => record.paymentStatus === paymentStatuses.paid);
 
   return {
@@ -830,20 +995,21 @@ function getStats() {
     matched: records.filter((record) => record.matching.status === "Matched").length,
     mismatched: records.filter((record) => record.matching.status === "Mismatch").length,
     pendingReview: records.filter((record) => record.matching.status === "Pending Review").length,
-    discrepancies: getAllDiscrepancies().length,
+    discrepancies: discrepancies.length,
     valid: records.filter((record) => record.validation.status === "Valid").length,
     invalid: records.filter((record) => record.validation.status === "Invalid").length,
-    pendingApproval: records.filter((record) => record.paymentStatus === paymentStatuses.pending).length,
-    pendingPayments: records.filter((record) => record.paymentStatus === paymentStatuses.pending).length,
+    pendingApproval: records.filter((record) => record.paymentStatus === paymentStatuses.held).length,
+    pendingPayments: records.filter((record) => record.paymentStatus === paymentStatuses.held).length,
     approvedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.approved).length,
-    rejectedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.rejected).length,
+    rejectedPayments: 0,
     paidInvoices: paidRecords.length,
     totalAmountPaid: paidRecords.reduce((total, record) => total + money(record.payment?.amountPaid), 0),
   };
 }
 
-function getReportRows() {
-  return getRecords().map((record) => ({
+async function getReportRows() {
+  const records = await getRecords();
+  return records.map((record) => ({
     id: record.id,
     supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
     poNumber: record.purchaseOrder?.poNumber || "Missing",
@@ -857,7 +1023,7 @@ function getReportRows() {
     transactionId: record.payment?.transactionId || "-",
     paymentMethod: record.payment?.method || "-",
     paidAt: record.payment?.paidAt || "",
-    actionDate: record.payment?.paidAt || record.rejectedAt || record.paymentUpdatedAt || record.approvedAt || record.createdAt || "",
+    actionDate: record.payment?.paidAt || record.createdAt || "",
   }));
 }
 

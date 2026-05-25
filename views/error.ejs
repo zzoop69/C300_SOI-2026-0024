@@ -1,0 +1,17 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Request could not be completed</h2>
+      <p>Please review the message below and try again.</p>
+    </div>
+  </div>
+
+  <div class="notice"><%= errorMessage %></div>
+  <div class="form-actions">
+    <a class="button" href="/upload">Back to Upload</a>
+  </div>
+</section>
+
+<%- include("partials/footer") %>
