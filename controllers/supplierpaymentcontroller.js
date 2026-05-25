@@ -12,6 +12,7 @@ const {
   getRecords,
   getReportRows,
   getStats,
+  markPaymentPaid,
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,
@@ -121,11 +122,30 @@ router.get("/matching-results", (req, res) => {
 });
 
 router.get("/payment-approval", (req, res) => {
+  const records = getRecords();
+  const statusGroups = {
+    pending: records.filter((record) => record.paymentStatus === paymentStatuses.pending),
+    approved: records.filter((record) => record.paymentStatus === paymentStatuses.approved),
+    processing: records.filter((record) => record.paymentStatus === paymentStatuses.processing),
+    held: records.filter((record) => record.paymentStatus === paymentStatuses.held),
+    rejected: records.filter((record) => record.paymentStatus === paymentStatuses.rejected),
+    paid: records.filter((record) => record.paymentStatus === paymentStatuses.paid),
+    actionNeeded: records.filter((record) =>
+      [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)
+    ),
+    approvedProcessing: records.filter((record) =>
+      [paymentStatuses.approved, paymentStatuses.processing].includes(record.paymentStatus)
+    ),
+  };
+
   res.render("payment-approval", {
     pageTitle: "Payment Approval",
     activePage: "approval",
-    records: getRecords(),
+    records,
     paymentList: getPaymentList(),
+    statusGroups,
+    currentFilter: req.query.filter || "all",
+    success: req.query.updated === "true",
   });
 });
 
@@ -138,12 +158,12 @@ router.post("/payment-approval/:id/approve", (req, res) => {
 
   approvePayment(req.params.id);
 
-  res.redirect("/payment-approval");
+  res.redirect("/payment-approval?updated=true");
 });
 
 router.post("/payment-approval/:id/reject", (req, res) => {
   rejectPayment(req.params.id);
-  res.redirect("/payment-approval");
+  res.redirect("/payment-approval?updated=true&filter=rejected");
 });
 
 router.post("/payment-approval/:id/process", (req, res) => {
@@ -157,7 +177,12 @@ router.post("/payment-approval/:id/process", (req, res) => {
     setPaymentStatus(req.params.id, paymentStatuses.processing);
   }
 
-  res.redirect("/payment-approval");
+  res.redirect("/payment-approval?updated=true&filter=processing");
+});
+
+router.post("/payment-approval/:id/paid", (req, res) => {
+  markPaymentPaid(req.params.id, req.body.paymentMethod);
+  res.redirect("/payment-approval?updated=true&filter=paid");
 });
 
 router.get("/payment-simulation", (req, res) => {

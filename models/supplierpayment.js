@@ -701,7 +701,10 @@ function setPaymentStatus(id, paymentStatus) {
   return updateRecord(id, (record) => ({
     ...record,
     paymentStatus,
-    approvalStatus: paymentStatus === paymentStatuses.approved ? "Approved" : record.approvalStatus || "Not Approved",
+    approvalStatus:
+      paymentStatus === paymentStatuses.approved || paymentStatus === paymentStatuses.processing || paymentStatus === paymentStatuses.paid
+        ? "Approved"
+        : record.approvalStatus || "Not Approved",
     paymentUpdatedAt: new Date().toISOString(),
   }));
 }
@@ -718,6 +721,7 @@ function approvePayment(id) {
     paymentStatus: paymentStatuses.approved,
     approvalStatus: "Approved",
     approvedAt: new Date().toISOString(),
+    paymentUpdatedAt: new Date().toISOString(),
   }));
 }
 
@@ -727,6 +731,7 @@ function rejectPayment(id) {
     paymentStatus: paymentStatuses.rejected,
     approvalStatus: "Rejected",
     rejectedAt: new Date().toISOString(),
+    paymentUpdatedAt: new Date().toISOString(),
   }));
 }
 
@@ -767,8 +772,43 @@ function simulatePayment(id, paymentMethod = "Demo Bank Transfer") {
   return decorateRecord(records[index]);
 }
 
+function markPaymentPaid(id, paymentMethod = "Demo Bank Transfer") {
+  const records = readRecords();
+  const index = records.findIndex((record) => Number(record.id) === Number(id));
+
+  if (index === -1) {
+    return null;
+  }
+
+  const decorated = decorateRecord(records[index]);
+  if (decorated.paymentStatus !== paymentStatuses.approved && decorated.paymentStatus !== paymentStatuses.processing) {
+    return decorated;
+  }
+
+  const paidAt = new Date().toISOString();
+  records[index] = {
+    ...migrateLegacyRecord(records[index]),
+    paymentStatus: paymentStatuses.paid,
+    approvalStatus: "Approved",
+    paymentUpdatedAt: paidAt,
+    payment: {
+      transactionId: records[index].payment?.transactionId || getNextTransactionId(records),
+      method: paymentMethod || "Demo Bank Transfer",
+      amountPaid: decorated.amountPayable,
+      paidAt,
+      status: paymentStatuses.paid,
+    },
+  };
+
+  saveRecords(records);
+  return decorateRecord(records[index]);
+}
+
 function getPaymentList() {
-  return getRecords().filter((record) => record.canApprovePayment);
+  return getRecords().filter((record) =>
+    record.canApprovePayment &&
+    [paymentStatuses.pending, paymentStatuses.approved, paymentStatuses.processing, paymentStatuses.held].includes(record.paymentStatus)
+  );
 }
 
 function getAllDiscrepancies() {
@@ -817,6 +857,7 @@ function getReportRows() {
     transactionId: record.payment?.transactionId || "-",
     paymentMethod: record.payment?.method || "-",
     paidAt: record.payment?.paidAt || "",
+    actionDate: record.payment?.paidAt || record.rejectedAt || record.paymentUpdatedAt || record.approvedAt || record.createdAt || "",
   }));
 }
 
@@ -830,6 +871,7 @@ module.exports = {
   getRecords,
   getReportRows,
   getStats,
+  markPaymentPaid,
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,

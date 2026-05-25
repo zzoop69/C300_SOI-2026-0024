@@ -15,34 +15,38 @@
       "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     },
     "purchaseOrder": {
-      "poNumber": "PO001",
-      "orderDate": "2026-04-20",
       "supplierName": "ABC Supplies",
-      "supplierContact": "91234567",
-      "itemName": "Rice",
-      "description": "5kg bag",
-      "quantity": "10",
+      "poNumber": "PO001",
+      "itemDescription": "5kg bag",
+      "quantityOrdered": "10",
       "unitPrice": "20",
-      "totalPrice": "200",
-      "deliveryDate": "2026-04-22",
-      "deliveryAddress": "Warehouse A"
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
     },
     "invoice": {
-      "invoiceNumber": "INV001",
-      "orderNumber": "ORD001",
-      "orderDate": "2026-04-20",
       "supplierName": "ABC Supplies",
-      "supplierContact": "91234567",
-      "itemName": "Rice",
-      "description": "5kg bag",
-      "quantity": "10",
+      "poNumber": "ORD001",
+      "invoiceNumber": "INV001",
+      "itemDescription": "5kg bag",
+      "quantityBilled": "10",
       "unitPrice": "20",
-      "itemTotal": "200",
-      "subtotal": "200"
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
     },
     "extractionStatus": "Extracted",
-    "paymentStatus": "Pending Approval",
-    "payment": null
+    "paymentStatus": "Rejected",
+    "payment": null,
+    "deliveryOrderFile": null,
+    "deliveryOrder": {
+      "supplierName": "",
+      "poNumber": "",
+      "doGrnNumber": "",
+      "itemDescription": "",
+      "quantityReceived": "",
+      "documentDate": ""
+    },
+    "approvalStatus": "Rejected",
+    "rejectedAt": "2026-05-25T03:26:20.930Z"
   },
   {
     "id": 2,
@@ -93,9 +97,10 @@
       "documentDate": "2026-04-20"
     },
     "extractionStatus": "Reviewed",
-    "paymentStatus": "Pending Approval",
-    "approvalStatus": "Not Approved",
-    "payment": null
+    "paymentStatus": "Rejected",
+    "approvalStatus": "Rejected",
+    "payment": null,
+    "rejectedAt": "2026-05-25T03:26:18.678Z"
   },
   {
     "id": 3,
