@@ -147,17 +147,15 @@ router.get("/matching-results", asyncRoute(async (req, res) => {
 router.get("/payment-approval", asyncRoute(async (req, res) => {
   const records = await getRecords();
   const statusGroups = {
-    pending: records.filter((record) => record.paymentStatus === paymentStatuses.pending),
+    pending: records.filter((record) =>
+      [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)
+    ),
     approved: records.filter((record) => record.paymentStatus === paymentStatuses.approved),
     processing: records.filter((record) => record.paymentStatus === paymentStatuses.processing),
-    held: records.filter((record) => record.paymentStatus === paymentStatuses.held),
     rejected: records.filter((record) => record.paymentStatus === paymentStatuses.rejected),
     paid: records.filter((record) => record.paymentStatus === paymentStatuses.paid),
     actionNeeded: records.filter((record) =>
       [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)
-    ),
-    approvedProcessing: records.filter((record) =>
-      [paymentStatuses.approved, paymentStatuses.processing].includes(record.paymentStatus)
     ),
   };
 
@@ -181,7 +179,7 @@ router.post("/payment-approval/:id/approve", asyncRoute(async (req, res) => {
 
   await approvePayment(req.params.id);
 
-  res.redirect("/payment-approval?updated=true");
+  res.redirect("/payment-approval?updated=true&filter=approved");
 }));
 
 router.post("/payment-approval/:id/reject", asyncRoute(async (req, res) => {
@@ -196,9 +194,7 @@ router.post("/payment-approval/:id/process", asyncRoute(async (req, res) => {
     return;
   }
 
-  if (record.paymentStatus === paymentStatuses.approved) {
-    await setPaymentStatus(req.params.id, paymentStatuses.processing);
-  }
+  await setPaymentStatus(req.params.id, paymentStatuses.processing);
 
   res.redirect("/payment-approval?updated=true&filter=processing");
 }));

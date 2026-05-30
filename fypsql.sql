@@ -123,7 +123,16 @@ CREATE TABLE `payment_due_list` (
   `due_date` DATE NOT NULL,
   `amount_due` DECIMAL(12,2) NOT NULL,
   `currency` VARCHAR(10) NOT NULL,
-  `payment_status` ENUM('READY', 'HOLD', 'PAID') NOT NULL DEFAULT 'HOLD',
+  `payment_status` ENUM(
+    'READY',
+    'HOLD',
+    'PAID',
+    'PENDING_APPROVAL',
+    'APPROVED_FOR_PAYMENT',
+    'PAYMENT_PROCESSING',
+    'REJECTED',
+    'PAYMENT_HELD'
+  ) NOT NULL DEFAULT 'PAYMENT_HELD',
   `exception_flag` ENUM('Y', 'N') NOT NULL DEFAULT 'N',
 
   PRIMARY KEY (`payment_due_id`),

@@ -14,6 +14,15 @@ const paymentStatuses = {
   held: "Payment Held",
 };
 
+const dbPaymentStatuses = {
+  pending: "PENDING_APPROVAL",
+  approved: "APPROVED_FOR_PAYMENT",
+  processing: "PAYMENT_PROCESSING",
+  paid: "PAID",
+  rejected: "REJECTED",
+  held: "PAYMENT_HELD",
+};
+
 const fieldsToCompare = [
   "supplierName",
   "poNumber",
@@ -275,8 +284,24 @@ function makeItemId(value) {
 }
 
 function dbPaymentStatusToUi(status, exceptionFlag) {
-  if (status === "PAID") {
+  if (status === dbPaymentStatuses.paid || status === paymentStatuses.paid) {
     return paymentStatuses.paid;
+  }
+
+  if (status === dbPaymentStatuses.rejected || status === paymentStatuses.rejected) {
+    return paymentStatuses.rejected;
+  }
+
+  if (status === dbPaymentStatuses.processing || status === paymentStatuses.processing) {
+    return paymentStatuses.processing;
+  }
+
+  if (status === dbPaymentStatuses.approved || status === paymentStatuses.approved) {
+    return paymentStatuses.approved;
+  }
+
+  if (status === dbPaymentStatuses.pending || status === paymentStatuses.pending) {
+    return paymentStatuses.pending;
   }
 
   if (status === "READY" && exceptionFlag !== "Y") {
@@ -287,15 +312,75 @@ function dbPaymentStatusToUi(status, exceptionFlag) {
 }
 
 function uiPaymentStatusToDb(status) {
-  if (status === paymentStatuses.paid) {
-    return "PAID";
+  const statusMap = {
+    [paymentStatuses.pending]: dbPaymentStatuses.pending,
+    [paymentStatuses.approved]: dbPaymentStatuses.approved,
+    [paymentStatuses.processing]: dbPaymentStatuses.processing,
+    [paymentStatuses.paid]: dbPaymentStatuses.paid,
+    [paymentStatuses.rejected]: dbPaymentStatuses.rejected,
+    [paymentStatuses.held]: dbPaymentStatuses.held,
+  };
+
+  return statusMap[status] || dbPaymentStatuses.held;
+}
+
+function approvalStatusLabel(paymentStatus) {
+  if (paymentStatus === paymentStatuses.rejected) {
+    return "Rejected";
   }
 
-  if (status === paymentStatuses.approved || status === paymentStatuses.processing) {
-    return "READY";
+  if (paymentStatus === paymentStatuses.paid) {
+    return "Paid";
   }
 
-  return "HOLD";
+  if ([paymentStatuses.approved, paymentStatuses.processing].includes(paymentStatus)) {
+    return "Approved";
+  }
+
+  return "Not Approved";
+}
+
+let paymentStatusColumnReady;
+
+async function ensurePaymentStatusColumnSupportsWorkflow() {
+  if (!paymentStatusColumnReady) {
+    paymentStatusColumnReady = (async () => {
+      const [rows] = await db.execute(
+        `
+          SELECT COLUMN_TYPE
+          FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'payment_due_list'
+            AND COLUMN_NAME = 'payment_status'
+          LIMIT 1
+        `
+      );
+      const columnType = rows[0]?.COLUMN_TYPE || "";
+      const requiredValues = Object.values(dbPaymentStatuses);
+
+      if (requiredValues.every((status) => columnType.includes(`'${status}'`))) {
+        return;
+      }
+
+      await db.execute(
+        `
+          ALTER TABLE payment_due_list
+          MODIFY payment_status ENUM(
+            'READY',
+            'HOLD',
+            'PAID',
+            'PENDING_APPROVAL',
+            'APPROVED_FOR_PAYMENT',
+            'PAYMENT_PROCESSING',
+            'REJECTED',
+            'PAYMENT_HELD'
+          ) NOT NULL DEFAULT 'PAYMENT_HELD'
+        `
+      );
+    })();
+  }
+
+  return paymentStatusColumnReady;
 }
 
 async function queryRecords(whereClause = "", values = []) {
@@ -369,6 +454,8 @@ async function queryRecords(whereClause = "", values = []) {
 }
 
 function rowToRecord(row, exceptions) {
+  const paymentStatus = dbPaymentStatusToUi(row.payment_status, row.exception_flag || (exceptions.length ? "Y" : "N"));
+
   return {
     id: row.invoice_id,
     createdAt: row.invoice_date,
@@ -403,12 +490,12 @@ function rowToRecord(row, exceptions) {
       totalAmount: normaliseValue(row.invoice_total_amount),
       documentDate: row.invoice_date,
     },
-    dbPaymentStatus: row.payment_status || "HOLD",
+    dbPaymentStatus: row.payment_status || dbPaymentStatuses.held,
     dbExceptionFlag: row.exception_flag || (exceptions.length ? "Y" : "N"),
     extractionStatus: row.do_id ? "Extracted" : "Needs Review",
-    paymentStatus: dbPaymentStatusToUi(row.payment_status, row.exception_flag || (exceptions.length ? "Y" : "N")),
-    approvalStatus: row.payment_status === "READY" || row.payment_status === "PAID" ? "Approved" : "Not Approved",
-    payment: row.payment_status === "PAID"
+    paymentStatus,
+    approvalStatus: approvalStatusLabel(paymentStatus),
+    payment: paymentStatus === paymentStatuses.paid
       ? {
           transactionId: `PAY-${row.payment_due_id || row.invoice_id}`,
           method: "Demo Bank Transfer",
@@ -768,6 +855,7 @@ async function saveDocumentSet(record) {
   const itemId = makeItemId(po.itemDescription || invoice.itemDescription);
   const poDate = sqlDate(po.documentDate);
   const invoiceDate = sqlDate(invoice.documentDate);
+  await ensurePaymentStatusColumnSupportsWorkflow();
   const connection = await db.getConnection();
 
   try {
@@ -839,7 +927,7 @@ async function saveDocumentSet(record) {
       databaseExceptions: [],
     });
     const exceptionFlag = draftRecord.discrepancies.length ? "Y" : "N";
-    const paymentStatus = draftRecord.canApprovePayment ? "READY" : "HOLD";
+    const paymentStatus = draftRecord.canApprovePayment ? dbPaymentStatuses.approved : dbPaymentStatuses.held;
 
     await connection.execute(
       `
@@ -933,6 +1021,7 @@ async function saveCorrectedData(id, formData) {
 }
 
 async function setPaymentStatus(id, paymentStatus) {
+  await ensurePaymentStatusColumnSupportsWorkflow();
   await db.execute(
     `
       UPDATE payment_due_list
@@ -945,17 +1034,11 @@ async function setPaymentStatus(id, paymentStatus) {
 }
 
 async function approvePayment(id) {
-  const record = await getRecord(id);
-
-  if (!record || !record.canApprovePayment) {
-    return record ? setPaymentStatus(id, paymentStatuses.held) : null;
-  }
-
   return setPaymentStatus(id, paymentStatuses.approved);
 }
 
 async function rejectPayment(id) {
-  return setPaymentStatus(id, paymentStatuses.held);
+  return setPaymentStatus(id, paymentStatuses.rejected);
 }
 
 async function simulatePayment(id) {
@@ -970,7 +1053,7 @@ async function getPaymentList() {
   const records = await getRecords();
   return records.filter((record) =>
     record.canApprovePayment &&
-    [paymentStatuses.approved, paymentStatuses.held].includes(record.paymentStatus)
+    [paymentStatuses.pending, paymentStatuses.approved, paymentStatuses.held].includes(record.paymentStatus)
   );
 }
 
@@ -998,10 +1081,10 @@ async function getStats() {
     discrepancies: discrepancies.length,
     valid: records.filter((record) => record.validation.status === "Valid").length,
     invalid: records.filter((record) => record.validation.status === "Invalid").length,
-    pendingApproval: records.filter((record) => record.paymentStatus === paymentStatuses.held).length,
-    pendingPayments: records.filter((record) => record.paymentStatus === paymentStatuses.held).length,
+    pendingApproval: records.filter((record) => [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)).length,
+    pendingPayments: records.filter((record) => [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)).length,
     approvedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.approved).length,
-    rejectedPayments: 0,
+    rejectedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.rejected).length,
     paidInvoices: paidRecords.length,
     totalAmountPaid: paidRecords.reduce((total, record) => total + money(record.payment?.amountPaid), 0),
   };

@@ -6,14 +6,7 @@
   const viewStatusGroups = locals.statusGroups || {};
   const viewCurrentFilter = locals.currentFilter || "all";
   const viewSuccess = Boolean(locals.success);
-  const actionNeededRecords = viewStatusGroups.actionNeeded || [
-    ...(viewStatusGroups.pending || []),
-    ...(viewStatusGroups.held || []),
-  ];
-  const approvedProcessingRecords = viewStatusGroups.approvedProcessing || [
-    ...(viewStatusGroups.approved || []),
-    ...(viewStatusGroups.processing || []),
-  ];
+  const actionNeededRecords = viewStatusGroups.pending || viewStatusGroups.actionNeeded || [];
   const statusClass = (value) => String(value || "neutral").toLowerCase().replaceAll(" ", "-").replaceAll("/", "-");
   const filters = [
     { key: "all", label: "All" },
@@ -31,14 +24,16 @@
       filters: ["all", "pending"],
     },
     {
-      title: "Approved / Processing",
-      description: "Invoices approved for payment or currently being processed.",
-      records: approvedProcessingRecords.filter((record) =>
-        viewCurrentFilter === "processing" ? record.paymentStatus === "Payment Processing" : true
-      ).filter((record) =>
-        viewCurrentFilter === "approved" ? record.paymentStatus === "Approved for Payment" : true
-      ),
-      filters: ["all", "approved", "processing"],
+      title: "Approved",
+      description: "Invoices approved for payment but not yet paid.",
+      records: viewStatusGroups.approved || [],
+      filters: ["all", "approved"],
+    },
+    {
+      title: "Processing",
+      description: "Invoices currently being processed for payment.",
+      records: viewStatusGroups.processing || [],
+      filters: ["all", "processing"],
     },
     {
       title: "Rejected",
