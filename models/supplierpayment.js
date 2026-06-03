@@ -763,6 +763,86 @@ function calculateMatching(record) {
   };
 }
 
+function uniqueMismatchFields(record) {
+  const discrepancies = dedupeDiscrepancies(record.discrepancies || []);
+  const fields = discrepancies
+    .map((discrepancy) => mismatchFieldLabel(discrepancy))
+    .filter(Boolean);
+
+  return [...new Set(fields)];
+}
+
+function normaliseDiscrepancyType(type) {
+  return String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+}
+
+function mismatchFieldLabel(discrepancy) {
+  if (normaliseDiscrepancyType(discrepancy.type) === "missing document") {
+    return `Missing ${discrepancy.field}`;
+  }
+
+  return discrepancy.field;
+}
+
+function dedupeDiscrepancies(discrepancies) {
+  const seen = new Set();
+
+  return discrepancies.filter((discrepancy) => {
+    const key = [
+      discrepancy.field,
+      normaliseDiscrepancyType(discrepancy.type),
+      discrepancy.poValue,
+      discrepancy.doGrnValue,
+      discrepancy.invoiceValue,
+    ].join("|");
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function toMatchingSummaryRow(record) {
+  const discrepancies = dedupeDiscrepancies(record.discrepancies || []);
+  const mismatchFields = record.matching.status === "Matched" ? [] : uniqueMismatchFields(record);
+
+  return {
+    invoiceId: record.id,
+    invoiceNumber: record.invoice?.invoiceNumber || record.id || "Missing",
+    supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
+    poNumber: record.purchaseOrder?.poNumber || record.invoice?.poNumber || "Missing",
+    doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
+    totalAmount: record.invoice?.totalAmount || record.purchaseOrder?.totalAmount || "0",
+    overallMatchStatus: record.matching.status,
+    mismatchFields,
+    discrepancyCount: discrepancies.length,
+  };
+}
+
+function toMatchingDetails(record) {
+  const discrepancies = dedupeDiscrepancies(record.discrepancies || []);
+
+  return {
+    invoiceId: record.id,
+    supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
+    invoiceNumber: record.invoice?.invoiceNumber || record.id || "Missing",
+    poNumber: record.purchaseOrder?.poNumber || record.invoice?.poNumber || "Missing",
+    doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
+    overallStatus: record.matching.status,
+    validationStatus: record.validation.status,
+    discrepancyCount: discrepancies.length,
+    rows: record.matching.rows,
+    discrepancies,
+    record,
+  };
+}
+
 function decorateRecord(record) {
   const validation = calculateValidation(record);
   const matching = calculateMatching(record);
@@ -788,6 +868,21 @@ async function getRecords() {
 async function getRecord(id) {
   const records = await queryRecords("WHERE si.invoice_id = ?", [id]);
   return records[0] || null;
+}
+
+async function getMatchingSummary() {
+  const records = await getRecords();
+  return records.map(toMatchingSummaryRow);
+}
+
+async function getMatchingDetailsByInvoiceId(invoiceId) {
+  const record = await getRecord(invoiceId);
+  return record ? toMatchingDetails(record) : null;
+}
+
+async function getDiscrepanciesByInvoiceId(invoiceId) {
+  const record = await getRecord(invoiceId);
+  return record ? dedupeDiscrepancies(record.discrepancies || []) : [];
 }
 
 function makeSupplierId() {
@@ -1115,6 +1210,9 @@ module.exports = {
   createUploadRecord,
   fieldsToCompare,
   getAllDiscrepancies,
+  getDiscrepanciesByInvoiceId,
+  getMatchingDetailsByInvoiceId,
+  getMatchingSummary,
   getPaymentList,
   getRecord,
   getRecords,

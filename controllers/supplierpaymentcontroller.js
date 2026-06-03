@@ -5,8 +5,10 @@ const path = require("path");
 const {
   approvePayment,
   createUploadRecord,
-  fieldsToCompare,
   getAllDiscrepancies,
+  getDiscrepanciesByInvoiceId,
+  getMatchingDetailsByInvoiceId,
+  getMatchingSummary,
   getPaymentList,
   getRecord,
   getRecords,
@@ -117,8 +119,7 @@ router.get("/extract/:id", asyncRoute(async (req, res) => {
 
 router.post("/extract/:id/save", asyncRoute(async (req, res) => {
   const result = await saveCorrectedData(req.params.id, req.body);
-  const supplierCreatedQuery = result.supplierAutoCreated ? "&supplierCreated=true" : "";
-  res.redirect(`/validate-data?record=${result.recordId}${supplierCreatedQuery}`);
+  res.redirect(`/matching-results/${encodeURIComponent(result.recordId)}?updated=true`);
 }));
 
 router.get("/records", (req, res) => {
@@ -139,8 +140,27 @@ router.get("/matching-results", asyncRoute(async (req, res) => {
   res.render("matching-results", {
     pageTitle: "Matching Results",
     activePage: "matching",
-    records: await getRecords(),
-    fieldsToCompare,
+    summaries: await getMatchingSummary(),
+  });
+}));
+
+router.get("/matching-results/:invoiceId", asyncRoute(async (req, res) => {
+  const [details, discrepancies] = await Promise.all([
+    getMatchingDetailsByInvoiceId(req.params.invoiceId),
+    getDiscrepanciesByInvoiceId(req.params.invoiceId),
+  ]);
+
+  if (!details) {
+    res.redirect("/matching-results");
+    return;
+  }
+
+  res.render("matching-details", {
+    pageTitle: "Matching Details",
+    activePage: "matching",
+    details,
+    discrepancies,
+    updated: req.query.updated === "true",
   });
 }));
 

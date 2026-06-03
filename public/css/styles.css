@@ -236,6 +236,18 @@ button {
   cursor: pointer;
 }
 
+.compact-button {
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .secondary-button {
   background: #175cd3;
 }
@@ -402,6 +414,11 @@ input {
   color: #475467;
 }
 
+.success-empty {
+  background: #ecfdf3;
+  color: #067647;
+}
+
 .match-block,
 .approval-card {
   padding: 20px;
@@ -422,6 +439,91 @@ input {
   background: #fff1f3;
   color: #b42318;
   font-weight: 800;
+}
+
+.matching-summary-wrap table {
+  min-width: 1040px;
+}
+
+.matching-summary-table td {
+  white-space: normal;
+}
+
+.matching-summary-table td:first-child,
+.matching-summary-table td:nth-child(3),
+.matching-summary-table td:nth-child(4),
+.matching-summary-table td:nth-child(5),
+.matching-summary-table td:nth-child(8),
+.matching-summary-table td:nth-child(9) {
+  white-space: nowrap;
+}
+
+.muted-text {
+  color: #667085;
+  font-weight: 800;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  max-width: 320px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  background: #fff1f3;
+  color: #b42318;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.count-pill {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #344054;
+  font-weight: 900;
+}
+
+.detail-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.detail-summary-grid div {
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+  min-width: 0;
+}
+
+.detail-summary-grid span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.detail-summary-grid strong {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.detail-summary-grid .status {
+  text-transform: none;
 }
 
 .report-summary {
@@ -538,6 +640,11 @@ input {
   .match-title,
   .card-heading {
     display: block;
+  }
+
+  .button-row {
+    justify-content: flex-start;
+    margin-top: 14px;
   }
 }
 

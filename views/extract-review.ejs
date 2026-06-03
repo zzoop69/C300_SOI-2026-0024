@@ -1,7 +1,7 @@
 <%- include("partials/header") %>
 
 <% if (saved) { %>
-  <div class="notice success-notice">Corrections saved successfully.</div>
+  <div class="notice success-notice">Changes saved and matching result updated.</div>
 <% } %>
 
 <% if (supplierCreated) { %>
@@ -12,9 +12,8 @@
   <div class="section-heading">
     <div>
       <h2>Review Extracted Excel Data - Record #<%= record.id %></h2>
-      <p>Edit any extracted value before validation and matching.</p>
+      <p>Edit extracted values here, then save to update validation, matching results, discrepancies, and payment status.</p>
     </div>
-    <a class="button" href="/validate-data?record=<%= record.id %>">Validate Record</a>
   </div>
 
   <form action="/extract/<%= record.id %>/save" method="POST">
@@ -66,7 +65,9 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit">Save Corrections</button>
+      <div class="button-row form-button-row">
+        <button type="submit">Save / Update Changes</button>
+      </div>
     </div>
   </form>
 </section>

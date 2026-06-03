@@ -3,81 +3,63 @@
 <section class="panel">
   <div class="section-heading">
     <div>
-      <h2>Dynamic 3-Way Matching Results</h2>
-      <p>PO, DO/GRN, and Supplier Invoice values are compared from uploaded Excel data and saved corrections.</p>
+      <h2>Matching Results</h2>
+      <p>Review one invoice at a time. Open details only when a record needs closer checking.</p>
     </div>
   </div>
 
-  <% if (records.length === 0) { %>
+  <% if (summaries.length === 0) { %>
     <div class="empty-state">No matching results yet. Upload and review documents first.</div>
-  <% } %>
-
-  <% records.forEach((record) => { %>
-    <article class="match-block">
-      <div class="match-title">
-        <div>
-          <h3>Record #<%= record.id %></h3>
-          <p><%= record.matching.message %></p>
-        </div>
-        <span class="status <%= record.matching.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.matching.status %></span>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
+  <% } else { %>
+    <div class="table-wrap matching-summary-wrap">
+      <table class="matching-summary-table">
+        <thead>
+          <tr>
+            <th>Invoice Number</th>
+            <th>Supplier Name</th>
+            <th>PO Number</th>
+            <th>DO/GRN Number</th>
+            <th>Total Amount</th>
+            <th>Overall Match Status</th>
+            <th>Mismatch Found</th>
+            <th>Discrepancy Count</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% summaries.forEach((summary) => { %>
             <tr>
-              <th>Field</th>
-              <th>Purchase Order</th>
-              <th>DO/GRN</th>
-              <th>Supplier Invoice</th>
-              <th>Result</th>
+              <td><strong><%= summary.invoiceNumber %></strong></td>
+              <td><%= summary.supplierName %></td>
+              <td><%= summary.poNumber %></td>
+              <td><%= summary.doGrnNumber %></td>
+              <td><%= summary.totalAmount %></td>
+              <td>
+                <span class="status <%= summary.overallMatchStatus.toLowerCase().replaceAll(' ', '-') %>">
+                  <%= summary.overallMatchStatus %>
+                </span>
+              </td>
+              <td>
+                <% if (summary.mismatchFields.length === 0) { %>
+                  <span class="muted-text">None</span>
+                <% } else { %>
+                  <div class="chip-list">
+                    <% summary.mismatchFields.forEach((field) => { %>
+                      <span class="chip"><%= field %></span>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </td>
+              <td><span class="count-pill"><%= summary.discrepancyCount %></span></td>
+              <td>
+                <a class="button compact-button" href="/matching-results/<%= encodeURIComponent(summary.invoiceId) %>">View Details</a>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            <% record.matching.rows.forEach((row) => { %>
-              <tr class="<%= row.result === 'Mismatch' ? 'highlight-row' : '' %>">
-                <td><%= row.label %></td>
-                <td><%= row.poValue %></td>
-                <td><%= row.doGrnValue %></td>
-                <td><%= row.invoiceValue %></td>
-                <td><span class="status <%= row.result.toLowerCase() %>"><%= row.result %></span></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-
-      <% if (record.discrepancies.length > 0) { %>
-        <h3 class="subheading">Discrepancies</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Mismatch Field</th>
-                <th>PO Value</th>
-                <th>DO/GRN Value</th>
-                <th>Invoice Value</th>
-                <th>Type</th>
-                <th>Recommended Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% record.discrepancies.forEach((discrepancy) => { %>
-                <tr>
-                  <td><%= discrepancy.field %></td>
-                  <td><%= discrepancy.poValue %></td>
-                  <td><%= discrepancy.doGrnValue %></td>
-                  <td><%= discrepancy.invoiceValue %></td>
-                  <td><%= discrepancy.type %></td>
-                  <td><%= discrepancy.action %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-    </article>
-  <% }) %>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
 </section>
 
 <%- include("partials/footer") %>
