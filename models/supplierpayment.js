@@ -4,6 +4,29 @@ const XLSX = require("xlsx");
 const db = require("../db");
 
 const uploadsDirectory = path.join(__dirname, "..", "uploads");
+const dataDirectory = path.join(__dirname, "..", "data");
+const pendingDocumentSetsPath = path.join(dataDirectory, "pending-document-sets.json");
+
+const pendingDocumentTypes = {
+  purchaseOrder: {
+    label: "Purchase Order",
+    shortLabel: "PO",
+    fileField: "poFile",
+    extractor: extractPurchaseOrder,
+  },
+  deliveryOrder: {
+    label: "DO/GRN",
+    shortLabel: "DO/GRN",
+    fileField: "doGrnFile",
+    extractor: extractDeliveryOrder,
+  },
+  invoice: {
+    label: "Supplier Invoice",
+    shortLabel: "Supplier Invoice",
+    fileField: "invoiceFile",
+    extractor: extractInvoice,
+  },
+};
 
 const paymentStatuses = {
   pending: "Pending Approval",
@@ -47,6 +70,11 @@ const comparisonLabels = {
 
 function ensureDataFile() {
   fs.mkdirSync(uploadsDirectory, { recursive: true });
+  fs.mkdirSync(dataDirectory, { recursive: true });
+
+  if (!fs.existsSync(pendingDocumentSetsPath)) {
+    fs.writeFileSync(pendingDocumentSetsPath, "[]");
+  }
 }
 
 function createUploadedFile(file) {
@@ -55,8 +83,8 @@ function createUploadedFile(file) {
   }
 
   return {
-    originalName: file.originalname,
-    storedName: file.filename,
+    originalName: file.originalname || file.originalName,
+    storedName: file.filename || file.storedName,
     path: file.path,
     mimetype: file.mimetype,
   };
@@ -1081,6 +1109,253 @@ async function createUploadRecord(files) {
   });
 }
 
+function makePendingSetId() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `PDS-${timestamp}-${random}`;
+}
+
+function readPendingDocumentSets() {
+  ensureDataFile();
+
+  try {
+    return JSON.parse(fs.readFileSync(pendingDocumentSetsPath, "utf8"));
+  } catch (error) {
+    return [];
+  }
+}
+
+function writePendingDocumentSets(sets) {
+  ensureDataFile();
+  fs.writeFileSync(pendingDocumentSetsPath, JSON.stringify(sets, null, 2));
+}
+
+function normaliseGroupingValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function pendingDocumentLabels(documents = {}) {
+  return Object.keys(pendingDocumentTypes)
+    .filter((type) => documents[type])
+    .map((type) => pendingDocumentTypes[type].shortLabel);
+}
+
+function missingPendingDocumentLabels(documents = {}) {
+  return Object.keys(pendingDocumentTypes)
+    .filter((type) => !documents[type])
+    .map((type) => pendingDocumentTypes[type].label);
+}
+
+function pendingSetStatus(set) {
+  if (set.extractedRecordId) {
+    return "Ready for Validation";
+  }
+
+  const missingDocuments = missingPendingDocumentLabels(set.documents);
+
+  if (missingDocuments.length === 0) {
+    return "Ready for Validation";
+  }
+
+  return "On Hold";
+}
+
+function decoratePendingDocumentSet(set) {
+  const uploadedDocuments = pendingDocumentLabels(set.documents);
+  const missingDocuments = missingPendingDocumentLabels(set.documents);
+  const status = pendingSetStatus(set);
+
+  return {
+    ...set,
+    uploadedDocuments,
+    missingDocuments,
+    status,
+    documentCount: uploadedDocuments.length,
+    missingDocumentText: missingDocuments.length ? `Missing ${missingDocuments.join(", ")}` : "No missing documents",
+    uploadedDocumentText: uploadedDocuments.length ? uploadedDocuments.join(", ") : "None",
+  };
+}
+
+async function getPendingDocumentSets() {
+  return readPendingDocumentSets()
+    .map(decoratePendingDocumentSet)
+    .filter((set) => set.missingDocuments.length > 0)
+    .sort((first, second) => new Date(second.lastUploadedAt || 0) - new Date(first.lastUploadedAt || 0));
+}
+
+async function getPendingDocumentSet(id) {
+  const sets = await getPendingDocumentSets();
+  return sets.find((set) => set.id === id) || null;
+}
+
+function lightweightDocumentMetadata(documentType, file, formData = {}) {
+  const typeConfig = pendingDocumentTypes[documentType];
+  const extracted = typeConfig.extractor(file);
+
+  return {
+    poNumber: normaliseValue(formData.poNumber) || extracted.poNumber || "",
+    supplierName: normaliseValue(formData.supplierName) || extracted.supplierName || "",
+    invoiceNumber: extracted.invoiceNumber || "",
+    doGrnNumber: extracted.doGrnNumber || "",
+    documentDate: extracted.documentDate || "",
+  };
+}
+
+function findPendingSetIndex(sets, setId, metadata) {
+  if (setId) {
+    const explicitIndex = sets.findIndex((set) => set.id === setId);
+
+    if (explicitIndex !== -1) {
+      return explicitIndex;
+    }
+  }
+
+  const poNumber = normaliseGroupingValue(metadata.poNumber);
+
+  if (!poNumber) {
+    return -1;
+  }
+
+  return sets.findIndex((set) => normaliseGroupingValue(set.poNumber) === poNumber && !set.extractedRecordId);
+}
+
+function filesFromPendingSet(set) {
+  return Object.entries(pendingDocumentTypes).reduce((files, [documentType, typeConfig]) => {
+    const document = set.documents[documentType];
+
+    if (document?.file) {
+      files[typeConfig.fileField] = [document.file];
+    }
+
+    return files;
+  }, {});
+}
+
+async function savePendingDocumentUpload(files, formData = {}) {
+  const documentType = formData.documentType;
+  const typeConfig = pendingDocumentTypes[documentType];
+  const uploadedFile = createUploadedFile(files.documentFile?.[0]);
+
+  if (!typeConfig) {
+    throw new Error("Please choose a valid document type.");
+  }
+
+  if (!uploadedFile) {
+    throw new Error("Please select an Excel file to upload.");
+  }
+
+  const metadata = lightweightDocumentMetadata(documentType, uploadedFile, formData);
+  const now = new Date().toISOString();
+  const sets = readPendingDocumentSets();
+  const setIndex = findPendingSetIndex(sets, formData.pendingSetId, metadata);
+  const existingSet = setIndex === -1
+    ? {
+        id: makePendingSetId(),
+        poNumber: metadata.poNumber || normaliseValue(formData.poNumber) || "Pending PO Reference",
+        supplierName: metadata.supplierName || normaliseValue(formData.supplierName) || "Pending Supplier",
+        documents: {},
+        createdAt: now,
+      }
+    : sets[setIndex];
+
+  existingSet.poNumber = metadata.poNumber || existingSet.poNumber || "Pending PO Reference";
+  existingSet.supplierName = metadata.supplierName || existingSet.supplierName || "Pending Supplier";
+  existingSet.documents[documentType] = {
+    documentType,
+    label: typeConfig.label,
+    file: uploadedFile,
+    metadata,
+    uploadedAt: now,
+  };
+  existingSet.lastUploadedAt = now;
+  existingSet.extractedRecordId = "";
+
+  const decoratedBeforeExtraction = decoratePendingDocumentSet(existingSet);
+  let result = {
+    status: decoratedBeforeExtraction.status,
+    pendingSet: decoratedBeforeExtraction,
+    missingDocuments: decoratedBeforeExtraction.missingDocuments,
+    extractedRecordId: "",
+  };
+
+  if (setIndex === -1) {
+    sets.push(existingSet);
+  } else {
+    sets[setIndex] = existingSet;
+  }
+
+  writePendingDocumentSets(sets);
+
+  if (decoratedBeforeExtraction.missingDocuments.length === 0) {
+    const uploadResult = await createUploadRecord(filesFromPendingSet(existingSet));
+    existingSet.extractedRecordId = uploadResult.recordId;
+    existingSet.status = "Ready for Validation";
+    result = {
+      status: "Ready for Validation",
+      pendingSet: decoratePendingDocumentSet(existingSet),
+      missingDocuments: [],
+      extractedRecordId: uploadResult.recordId,
+      supplierAutoCreated: uploadResult.supplierAutoCreated,
+    };
+
+    writePendingDocumentSets(sets);
+  }
+
+  return result;
+}
+
+async function deletePendingDocumentSet(id) {
+  const sets = readPendingDocumentSets();
+  const set = sets.find((pendingSet) => pendingSet.id === id);
+
+  if (!set || set.extractedRecordId) {
+    return false;
+  }
+
+  Object.values(set.documents || {}).forEach((document) => {
+    if (document.file?.path && fs.existsSync(document.file.path)) {
+      fs.unlinkSync(document.file.path);
+    }
+  });
+
+  writePendingDocumentSets(sets.filter((pendingSet) => pendingSet.id !== id));
+  return true;
+}
+
+async function deletePendingDocumentFromSet(id, documentType) {
+  const sets = readPendingDocumentSets();
+  const setIndex = sets.findIndex((pendingSet) => pendingSet.id === id);
+  const set = sets[setIndex];
+
+  if (!set || set.extractedRecordId || !pendingDocumentTypes[documentType]) {
+    return false;
+  }
+
+  const document = set.documents?.[documentType];
+
+  if (!document) {
+    return false;
+  }
+
+  if (document.file?.path && fs.existsSync(document.file.path)) {
+    fs.unlinkSync(document.file.path);
+  }
+
+  delete set.documents[documentType];
+
+  const remainingUploadDates = Object.values(set.documents || {})
+    .map((remainingDocument) => remainingDocument.uploadedAt)
+    .filter(Boolean)
+    .sort();
+
+  set.lastUploadedAt = remainingUploadDates.pop() || set.createdAt || "";
+  sets[setIndex] = set;
+  writePendingDocumentSets(sets);
+  return true;
+}
+
 async function saveCorrectedData(id, formData) {
   const existingRecord = await getRecord(id);
   return saveDocumentSet({
@@ -1166,6 +1441,9 @@ async function getStats() {
   const records = await getRecords();
   const discrepancies = records.flatMap((record) => record.discrepancies);
   const paidRecords = records.filter((record) => record.paymentStatus === paymentStatuses.paid);
+  const readyForPayment = records.filter((record) => record.paymentStatus === paymentStatuses.approved).length;
+  const paymentHeld = records.filter((record) => record.paymentStatus === paymentStatuses.held).length;
+  const validationIssues = records.filter((record) => record.validation.status === "Invalid").length;
 
   return {
     totalRecords: records.length,
@@ -1175,10 +1453,13 @@ async function getStats() {
     pendingReview: records.filter((record) => record.matching.status === "Pending Review").length,
     discrepancies: discrepancies.length,
     valid: records.filter((record) => record.validation.status === "Valid").length,
-    invalid: records.filter((record) => record.validation.status === "Invalid").length,
+    invalid: validationIssues,
+    validationIssues,
     pendingApproval: records.filter((record) => [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)).length,
     pendingPayments: records.filter((record) => [paymentStatuses.pending, paymentStatuses.held].includes(record.paymentStatus)).length,
-    approvedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.approved).length,
+    approvedPayments: readyForPayment,
+    readyForPayment,
+    paymentHeld,
     rejectedPayments: records.filter((record) => record.paymentStatus === paymentStatuses.rejected).length,
     paidInvoices: paidRecords.length,
     totalAmountPaid: paidRecords.reduce((total, record) => total + money(record.payment?.amountPaid), 0),
@@ -1208,11 +1489,15 @@ async function getReportRows() {
 module.exports = {
   approvePayment,
   createUploadRecord,
+  deletePendingDocumentFromSet,
+  deletePendingDocumentSet,
   fieldsToCompare,
   getAllDiscrepancies,
   getDiscrepanciesByInvoiceId,
   getMatchingDetailsByInvoiceId,
   getMatchingSummary,
+  getPendingDocumentSet,
+  getPendingDocumentSets,
   getPaymentList,
   getRecord,
   getRecords,
@@ -1222,6 +1507,7 @@ module.exports = {
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,
+  savePendingDocumentUpload,
   setPaymentStatus,
   simulatePayment,
   ensureDataFile,

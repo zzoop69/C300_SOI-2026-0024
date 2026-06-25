@@ -5,10 +5,14 @@ const path = require("path");
 const {
   approvePayment,
   createUploadRecord,
+  deletePendingDocumentFromSet,
+  deletePendingDocumentSet,
   getAllDiscrepancies,
   getDiscrepanciesByInvoiceId,
   getMatchingDetailsByInvoiceId,
   getMatchingSummary,
+  getPendingDocumentSet,
+  getPendingDocumentSets,
   getPaymentList,
   getRecord,
   getRecords,
@@ -18,6 +22,7 @@ const {
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,
+  savePendingDocumentUpload,
   setPaymentStatus,
   simulatePayment,
 } = require("../models/supplierpayment");
@@ -33,6 +38,34 @@ function asyncRoute(handler) {
   return (req, res, next) => {
     Promise.resolve(handler(req, res, next)).catch(next);
   };
+}
+
+async function savePartialDocumentFiles(files, formData) {
+  const uploadMap = [
+    ["poFile", "purchaseOrder"],
+    ["doGrnFile", "deliveryOrder"],
+    ["invoiceFile", "invoice"],
+  ];
+  let result = null;
+  let pendingSetId = formData.pendingSetId || "";
+
+  for (const [fileField, documentType] of uploadMap) {
+    if (!files[fileField]) {
+      continue;
+    }
+
+    result = await savePendingDocumentUpload(
+      { documentFile: files[fileField] },
+      {
+        ...formData,
+        pendingSetId,
+        documentType,
+      }
+    );
+    pendingSetId = result.pendingSet?.id || pendingSetId;
+  }
+
+  return result;
 }
 
 async function findRecordOrRedirect(req, res) {
@@ -57,41 +90,109 @@ router.get("/dashboard", asyncRoute(async (req, res) => {
     pageTitle: "Dashboard",
     activePage: "dashboard",
     stats,
-    records: records.slice(0, 6),
+    records,
   });
 }));
 
-router.get("/upload", (req, res) => {
+router.get("/upload", asyncRoute(async (req, res) => {
+  const [pendingDocumentSets, selectedPendingSet] = await Promise.all([
+    getPendingDocumentSets(),
+    req.query.set ? getPendingDocumentSet(req.query.set) : Promise.resolve(null),
+  ]);
+
   res.render("upload", {
     pageTitle: "Upload Documents",
     activePage: "upload",
-    successMessage: req.query.uploaded === "true" ? "Upload processed successfully." : "",
+    successMessage: req.query.uploaded === "true"
+      ? "Upload processed successfully."
+      : req.query.deleted === "true"
+        ? "Pending document set deleted."
+        : "",
+    holdMessage: req.query.held === "true" ? `Document saved on hold. Missing: ${req.query.missing || "required documents"}.` : "",
+    completedMessage: req.query.completed === "true" ? "Document set is complete and extraction has started." : "",
     errorMessage: "",
+    pendingDocumentSets,
+    selectedPendingSet,
   });
-});
+}));
 
 router.post(
   "/upload",
   upload.fields([
+    { name: "documentFile", maxCount: 1 },
     { name: "poFile", maxCount: 1 },
     { name: "doGrnFile", maxCount: 1 },
     { name: "invoiceFile", maxCount: 1 },
   ]),
   asyncRoute(async (req, res) => {
     try {
-      const result = await createUploadRecord(req.files || {});
-      const supplierCreatedQuery = result.supplierAutoCreated ? "?supplierCreated=true" : "";
-      res.redirect(`/extract/${result.recordId}${supplierCreatedQuery}`);
+      const legacyFiles = req.files || {};
+      const hasLegacyUpload = legacyFiles.poFile || legacyFiles.doGrnFile || legacyFiles.invoiceFile;
+      const hasCompleteLegacyUpload = legacyFiles.poFile && legacyFiles.doGrnFile && legacyFiles.invoiceFile;
+
+      if (hasCompleteLegacyUpload && !req.body.pendingSetId) {
+        await createUploadRecord(req.files || {});
+        res.redirect(303, "/upload");
+        return;
+      }
+
+      if (hasLegacyUpload) {
+        if (req.body.holdIncomplete !== "true" && !req.body.pendingSetId) {
+          throw new Error("Please upload all three files, or choose Put On Hold for an incomplete set.");
+        }
+
+        const result = await savePartialDocumentFiles(legacyFiles, req.body);
+
+        if (!result) {
+          throw new Error("Please select at least one Excel file.");
+        }
+
+        if (result.extractedRecordId) {
+          res.redirect(303, "/upload");
+          return;
+        }
+
+        res.redirect(303, "/upload");
+        return;
+      }
+
+      const result = await savePendingDocumentUpload(req.files || {}, req.body);
+
+      if (result.extractedRecordId) {
+        res.redirect(303, "/upload");
+        return;
+      }
+
+      res.redirect(303, "/upload");
     } catch (error) {
+      const [pendingDocumentSets, selectedPendingSet] = await Promise.all([
+        getPendingDocumentSets(),
+        req.body?.pendingSetId ? getPendingDocumentSet(req.body.pendingSetId) : Promise.resolve(null),
+      ]);
+
       res.status(400).render("upload", {
         pageTitle: "Upload Documents",
         activePage: "upload",
         successMessage: "",
+        holdMessage: "",
+        completedMessage: "",
         errorMessage: error.message || "Upload could not be processed. Please check the Excel files and try again.",
+        pendingDocumentSets,
+        selectedPendingSet,
       });
     }
   })
 );
+
+router.post("/pending-document-sets/:id/delete", asyncRoute(async (req, res) => {
+  await deletePendingDocumentSet(req.params.id);
+  res.redirect("/upload?deleted=true");
+}));
+
+router.post("/pending-document-sets/:id/documents/:documentType/delete", asyncRoute(async (req, res) => {
+  await deletePendingDocumentFromSet(req.params.id, req.params.documentType);
+  res.redirect(`/upload?set=${encodeURIComponent(req.params.id)}`);
+}));
 
 router.get("/extracted-data", asyncRoute(async (req, res) => {
   res.render("records", {
