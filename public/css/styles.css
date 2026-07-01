@@ -924,7 +924,7 @@ select {
 .upload-toast {
   position: fixed;
   top: 24px;
-  right: 24px;
+  left: calc(var(--sidebar-width) + 24px);
   z-index: 40;
   max-width: 340px;
   border: 1px solid #abefc6;
@@ -1293,6 +1293,16 @@ select {
   text-transform: uppercase;
 }
 
+.matching-tools {
+  grid-template-columns: minmax(280px, 1.4fr) minmax(180px, 230px) minmax(190px, 240px) minmax(190px, 240px);
+}
+
+.amount-range-filter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .dashboard-table {
   min-width: 960px;
 }
@@ -1519,6 +1529,12 @@ select {
   .selected-upload-set,
   .upload-actions {
     display: block;
+  }
+
+  .upload-toast {
+    left: calc(var(--sidebar-width) + 12px);
+    right: 12px;
+    max-width: none;
   }
 
   .selected-upload-set span,

@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const XLSX = require("xlsx");
 
 const {
   approvePayment,
@@ -79,6 +80,68 @@ async function findRecordOrRedirect(req, res) {
   return record;
 }
 
+function matchingHistoryExportRow(row) {
+  return {
+    Record: `#${row.id}`,
+    Supplier: row.supplierName,
+    PO: row.poNumber,
+    "DO/GRN": row.doGrnNumber,
+    Invoice: row.invoiceNumber,
+    Amount: Number(row.amount || 0),
+    "Match Status": row.matchStatus,
+    "Validation Status": row.validationStatus,
+    "Approval Status": row.approvalStatus,
+  };
+}
+
+function appendMatchingHistorySheet(workbook, sheetName, rows) {
+  const exportRows = rows.map(matchingHistoryExportRow);
+  const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+    header: [
+      "Record",
+      "Supplier",
+      "PO",
+      "DO/GRN",
+      "Invoice",
+      "Amount",
+      "Match Status",
+      "Validation Status",
+      "Approval Status",
+    ],
+  });
+
+  worksheet["!cols"] = [
+    { wch: 12 },
+    { wch: 28 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 20 },
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+}
+
+function createMatchingHistoryWorkbook(rows) {
+  const workbook = XLSX.utils.book_new();
+  appendMatchingHistorySheet(workbook, "All Matching History", rows);
+  appendMatchingHistorySheet(
+    workbook,
+    "Matched Records",
+    rows.filter((row) => row.matchStatus === "Matched")
+  );
+  appendMatchingHistorySheet(
+    workbook,
+    "Mismatched Records",
+    rows.filter((row) => row.matchStatus === "Mismatch")
+  );
+
+  return workbook;
+}
+
 router.get("/", (req, res) => {
   res.redirect("/dashboard");
 });
@@ -104,7 +167,7 @@ router.get("/upload", asyncRoute(async (req, res) => {
     pageTitle: "Upload Documents",
     activePage: "upload",
     successMessage: req.query.uploaded === "true"
-      ? "Upload processed successfully."
+      ? "Documents uploaded successfully!"
       : req.query.deleted === "true"
         ? "Pending document set deleted."
         : "",
@@ -132,7 +195,7 @@ router.post(
 
       if (hasCompleteLegacyUpload && !req.body.pendingSetId) {
         await createUploadRecord(req.files || {});
-        res.redirect(303, "/upload");
+        res.redirect(303, "/upload?uploaded=true");
         return;
       }
 
@@ -148,7 +211,7 @@ router.post(
         }
 
         if (result.extractedRecordId) {
-          res.redirect(303, "/upload");
+          res.redirect(303, "/upload?uploaded=true");
           return;
         }
 
@@ -159,7 +222,7 @@ router.post(
       const result = await savePendingDocumentUpload(req.files || {}, req.body);
 
       if (result.extractedRecordId) {
-        res.redirect(303, "/upload");
+        res.redirect(303, "/upload?uploaded=true");
         return;
       }
 
@@ -368,6 +431,16 @@ router.get("/reports", asyncRoute(async (req, res) => {
     rows,
     discrepancies,
   });
+}));
+
+router.get("/reports/matching-history.xlsx", asyncRoute(async (req, res) => {
+  const rows = await getReportRows();
+  const workbook = createMatchingHistoryWorkbook(rows);
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", "attachment; filename=\"matching-history-report.xlsx\"");
+  res.send(buffer);
 }));
 
 module.exports = router;

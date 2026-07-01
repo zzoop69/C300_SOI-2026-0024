@@ -36,9 +36,10 @@
     : [];
   const selectedMissingTypes = selectedSet?.missingDocuments || [];
   const formatDate = (value) => value ? new Date(value).toLocaleString() : "-";
+  const showUploadSuccessPopup = successMessage === "Documents uploaded successfully!";
 %>
 
-<% if (successMessage) { %>
+<% if (successMessage && !showUploadSuccessPopup) { %>
   <div class="notice success-notice"><%= successMessage %></div>
 <% } %>
 
@@ -261,7 +262,9 @@
   </section>
 </div>
 
-<div class="upload-toast" id="uploadToast" hidden>Uploaded successfully. Preparing extraction...</div>
+<div class="upload-toast" id="uploadToast" <%= showUploadSuccessPopup ? "" : "hidden" %>>
+  <%= showUploadSuccessPopup ? successMessage : "Uploading documents..." %>
+</div>
 
 <script>
   const pendingSets = <%- JSON.stringify(sets) %>;
@@ -282,6 +285,24 @@
   const goBackUpload = document.getElementById("goBackUpload");
   const putOnHoldButton = document.getElementById("putOnHoldButton");
   const uploadToast = document.getElementById("uploadToast");
+  let uploadToastTimeout;
+
+  function showUploadToast(message = "Documents uploaded successfully!") {
+    if (!uploadToast) {
+      return;
+    }
+
+    uploadToast.textContent = message;
+    uploadToast.hidden = false;
+    window.clearTimeout(uploadToastTimeout);
+    uploadToastTimeout = window.setTimeout(() => {
+      uploadToast.hidden = true;
+    }, 4500);
+  }
+
+  if (uploadToast && !uploadToast.hidden) {
+    showUploadToast(uploadToast.textContent.trim());
+  }
 
   function dateInputValueFromTimestamp(value) {
     if (!value) {
@@ -381,9 +402,11 @@
       missingDocumentList.append(item);
     });
     missingDocumentsModal.hidden = false;
+    uploadToast.hidden = true;
   }
 
   documentSetForm?.addEventListener("submit", (event) => {
+    showUploadToast();
     const missingDocuments = missingUploadDocuments();
 
     if (holdIncomplete.value === "true") {
@@ -395,8 +418,6 @@
       showMissingDocuments(missingDocuments);
       return;
     }
-
-    uploadToast.hidden = false;
   });
 
   goBackUpload?.addEventListener("click", () => {

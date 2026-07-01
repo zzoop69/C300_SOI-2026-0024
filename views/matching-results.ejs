@@ -1,5 +1,15 @@
 <%- include("partials/header") %>
 
+<%
+  const mismatchTypes = [...new Set(
+    summaries.flatMap((summary) => summary.mismatchFields || [])
+  )].sort();
+  const overallMatchStatuses = [...new Set(
+    summaries.map((summary) => summary.overallMatchStatus).filter(Boolean)
+  )].sort();
+  const numericAmount = (value) => Number(String(value || "").replace(/[^0-9.-]/g, "")) || 0;
+%>
+
 <section class="panel">
   <div class="section-heading">
     <div>
@@ -11,6 +21,38 @@
   <% if (summaries.length === 0) { %>
     <div class="empty-state">No matching results yet. Upload and review documents first.</div>
   <% } else { %>
+    <div class="record-tools matching-tools">
+      <label class="matching-search-field">
+        <span>Search</span>
+        <input id="matchingSearch" type="search" placeholder="Search invoice, supplier, PO, or GRN">
+      </label>
+      <label>
+        <span>Mismatch type</span>
+        <select id="mismatchTypeFilter">
+          <option value="all">All mismatch types</option>
+          <% mismatchTypes.forEach((type) => { %>
+            <option value="<%= type.toLowerCase() %>"><%= type %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        <span>Amount range</span>
+        <div class="amount-range-filter">
+          <input id="minAmountFilter" type="number" min="0" step="0.01" placeholder="Min">
+          <input id="maxAmountFilter" type="number" min="0" step="0.01" placeholder="Max">
+        </div>
+      </label>
+      <label>
+        <span>Overall match status</span>
+        <select id="overallMatchFilter">
+          <option value="all">All match statuses</option>
+          <% overallMatchStatuses.forEach((status) => { %>
+            <option value="<%= status.toLowerCase() %>"><%= status %></option>
+          <% }) %>
+        </select>
+      </label>
+    </div>
+
     <div class="table-wrap matching-summary-wrap">
       <table class="matching-summary-table">
         <thead>
@@ -28,7 +70,12 @@
         </thead>
         <tbody>
           <% summaries.forEach((summary) => { %>
-            <tr>
+            <tr
+              data-search="<%= `${summary.invoiceNumber} ${summary.supplierName} ${summary.poNumber} ${summary.doGrnNumber}`.toLowerCase() %>"
+              data-mismatch-types="<%= (summary.mismatchFields || []).map((field) => field.toLowerCase()).join("|") %>"
+              data-amount="<%= numericAmount(summary.totalAmount) %>"
+              data-overall-match-status="<%= String(summary.overallMatchStatus || "").toLowerCase() %>"
+            >
               <td><strong><%= summary.invoiceNumber %></strong></td>
               <td><%= summary.supplierName %></td>
               <td><%= summary.poNumber %></td>
@@ -56,10 +103,70 @@
               </td>
             </tr>
           <% }) %>
+          <tr id="noMatchingRows" hidden>
+            <td colspan="9">
+              <div class="empty-state">No matching results found for the selected filters.</div>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
   <% } %>
 </section>
+
+<script>
+  const matchingSearch = document.getElementById("matchingSearch");
+  const mismatchTypeFilter = document.getElementById("mismatchTypeFilter");
+  const minAmountFilter = document.getElementById("minAmountFilter");
+  const maxAmountFilter = document.getElementById("maxAmountFilter");
+  const overallMatchFilter = document.getElementById("overallMatchFilter");
+  const matchingRows = [...document.querySelectorAll(".matching-summary-table tbody tr[data-search]")];
+  const noMatchingRows = document.getElementById("noMatchingRows");
+
+  function filterMatchingRows() {
+    const searchTerm = (matchingSearch?.value || "").trim().toLowerCase();
+    const selectedMismatchType = mismatchTypeFilter?.value || "all";
+    const minimumAmount = minAmountFilter?.value === "" ? null : Number(minAmountFilter.value);
+    const maximumAmount = maxAmountFilter?.value === "" ? null : Number(maxAmountFilter.value);
+    const selectedOverallMatch = overallMatchFilter?.value || "all";
+    let visibleCount = 0;
+
+    matchingRows.forEach((row) => {
+      const amount = Number(row.dataset.amount || 0);
+      const mismatchTypes = (row.dataset.mismatchTypes || "").split("|").filter(Boolean);
+      const matchesSearch = !searchTerm || row.dataset.search.includes(searchTerm);
+      const matchesMismatchType = selectedMismatchType === "all" || mismatchTypes.includes(selectedMismatchType);
+      const matchesMinimumAmount = minimumAmount === null || amount >= minimumAmount;
+      const matchesMaximumAmount = maximumAmount === null || amount <= maximumAmount;
+      const matchesOverallStatus = selectedOverallMatch === "all" || row.dataset.overallMatchStatus === selectedOverallMatch;
+      const isVisible = matchesSearch &&
+        matchesMismatchType &&
+        matchesMinimumAmount &&
+        matchesMaximumAmount &&
+        matchesOverallStatus;
+
+      row.hidden = !isVisible;
+
+      if (isVisible) {
+        visibleCount += 1;
+      }
+    });
+
+    if (noMatchingRows) {
+      noMatchingRows.hidden = visibleCount !== 0;
+    }
+  }
+
+  [
+    matchingSearch,
+    mismatchTypeFilter,
+    minAmountFilter,
+    maxAmountFilter,
+    overallMatchFilter,
+  ].forEach((control) => {
+    control?.addEventListener("input", filterMatchingRows);
+    control?.addEventListener("change", filterMatchingRows);
+  });
+</script>
 
 <%- include("partials/footer") %>

@@ -180,24 +180,6 @@
     "poNumber": "PO-2026-007",
     "supplierName": "RapidTech Hardware Pte Ltd",
     "documents": {
-      "deliveryOrder": {
-        "documentType": "deliveryOrder",
-        "label": "DO/GRN",
-        "file": {
-          "originalName": "MATCHED_004_DO_GRN.xlsx",
-          "storedName": "4058f68fc9e0cc39e1ffd1b63fedb2d0",
-          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\4058f68fc9e0cc39e1ffd1b63fedb2d0",
-          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        },
-        "metadata": {
-          "poNumber": "PO-2026-004",
-          "supplierName": "TechNova Solutions Pte Ltd",
-          "invoiceNumber": "",
-          "doGrnNumber": "GRN-2026-004",
-          "documentDate": ""
-        },
-        "uploadedAt": "2026-06-23T17:08:09.018Z"
-      },
       "invoice": {
         "documentType": "invoice",
         "label": "Supplier Invoice",
@@ -215,11 +197,48 @@
           "documentDate": "2026-06-03"
         },
         "uploadedAt": "2026-06-25T04:27:28.539Z"
+      },
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "MISMATCH_007_PO.xlsx",
+          "storedName": "1e09ed0de575cec6d77e12a59d140244",
+          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\1e09ed0de575cec6d77e12a59d140244",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-007",
+          "supplierName": "RapidTech Hardware Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-06-01"
+        },
+        "uploadedAt": "2026-06-30T07:45:19.638Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "MISMATCH_007_DO_GRN.xlsx",
+          "storedName": "22e704bcf66ae8775e9444e22453b3fe",
+          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\22e704bcf66ae8775e9444e22453b3fe",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-007",
+          "supplierName": "RapidTech Hardware Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "GRN-2026-007",
+          "documentDate": ""
+        },
+        "uploadedAt": "2026-06-30T07:45:19.654Z"
       }
     },
     "createdAt": "2026-06-23T17:08:09.018Z",
-    "lastUploadedAt": "2026-06-25T04:27:28.539Z",
-    "extractedRecordId": ""
+    "lastUploadedAt": "2026-06-30T07:45:19.654Z",
+    "extractedRecordId": "INV-2026-007",
+    "status": "Ready for Validation"
   },
   {
     "id": "PDS-MQT1BECI-FZPRE",
@@ -276,5 +295,70 @@
     "createdAt": "2026-06-25T05:01:38.608Z",
     "lastUploadedAt": "2026-06-25T05:01:38.608Z",
     "extractedRecordId": ""
+  },
+  {
+    "id": "PDS-MR0C5OTW-L7INC",
+    "poNumber": "PO-2026-008",
+    "supplierName": "Sunrise Catering Pte Ltd",
+    "documents": {
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "MISMATCH_008_PO.xlsx",
+          "storedName": "492aed406e0a1c2ce7791395c5baf165",
+          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\492aed406e0a1c2ce7791395c5baf165",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-008",
+          "supplierName": "Sunrise Catering Supplies Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-06-04"
+        },
+        "uploadedAt": "2026-06-30T07:39:14.033Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "MISMATCH_008_SUPPLIER_INVOICE.xlsx",
+          "storedName": "f4d839a860c77b0750d1956e3120cc8b",
+          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\f4d839a860c77b0750d1956e3120cc8b",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-008",
+          "supplierName": "Sunrise Catering Supplies Pte Ltd",
+          "invoiceNumber": "INV-2026-008",
+          "doGrnNumber": "",
+          "documentDate": "2026-06-06"
+        },
+        "uploadedAt": "2026-06-30T07:41:11.650Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "MISMATCH_008_DO_GRN.xlsx",
+          "storedName": "26664fffeed04061d8af47698b6472a6",
+          "path": "C:\\C303\\Downloads\\C300_SOI-2026-0024-main (2)\\C300_SOI-2026-0024-main\\uploads\\26664fffeed04061d8af47698b6472a6",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-008",
+          "supplierName": "Sunrise Catering Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "GRN-2026-008",
+          "documentDate": ""
+        },
+        "uploadedAt": "2026-06-30T07:41:24.786Z"
+      }
+    },
+    "createdAt": "2026-06-30T07:39:14.033Z",
+    "lastUploadedAt": "2026-06-30T07:41:24.786Z",
+    "extractedRecordId": "INV-2026-008",
+    "status": "Ready for Validation"
   }
 ]
