@@ -55,6 +55,56 @@
   <div class="notice"><%= errorMessage %></div>
 <% } %>
 
+<section class="panel excel-guide-panel">
+  <div class="section-heading compact-heading">
+    <div>
+      <h2>Excel Column Guide</h2>
+      <p>Prepare each Excel file with these columns before uploading.</p>
+    </div>
+  </div>
+
+  <div class="excel-guide-grid">
+    <article class="excel-guide-card">
+      <h3>Purchase Order</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>Item Description</li>
+        <li>Quantity Ordered</li>
+        <li>Unit Price</li>
+        <li>Total Amount</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+
+    <article class="excel-guide-card">
+      <h3>Delivery Order / GRN</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>DO/GRN Number</li>
+        <li>Item Description</li>
+        <li>Quantity Received</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+
+    <article class="excel-guide-card">
+      <h3>Supplier Invoice</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>Invoice Number</li>
+        <li>Item Description</li>
+        <li>Quantity Billed</li>
+        <li>Unit Price</li>
+        <li>Total Amount</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
 <section class="panel upload-document-panel">
   <div class="section-heading">
     <div>
@@ -222,13 +272,6 @@
       </table>
     </div>
   <% } %>
-</section>
-
-<section class="panel muted-panel">
-  <h2>Excel Column Guide</h2>
-  <p>Purchase Order: Supplier Name, PO Number, Item Description, Quantity Ordered, Unit Price, Total Amount, Document Date.</p>
-  <p>DO/GRN: Supplier Name, PO Number, DO/GRN Number, Item Description, Quantity Received, Document Date.</p>
-  <p>Supplier Invoice: Supplier Name, PO Number, Invoice Number, Quantity Billed, Unit Price, Total Amount, Document Date.</p>
 </section>
 
 <div class="modal-backdrop" id="holdDetailsModal" hidden>
