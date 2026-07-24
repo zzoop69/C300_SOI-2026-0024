@@ -1,0 +1,32 @@
+<%
+  const errors = !isViewOnly && Array.isArray(validationFieldErrors[fieldKey])
+    ? validationFieldErrors[fieldKey]
+    : [];
+  const isInvalid = errors.length > 0;
+  const errorId = `${inputName}-validation-error`;
+  const inputType = locals.inputType || "text";
+%>
+<label class="review-field <%= isInvalid ? 'review-field--invalid' : '' %>">
+  <span class="review-field-label">
+    <%= fieldLabel %>
+    <% if (isInvalid) { %>
+      <span class="review-field-warning-icon" aria-hidden="true">!</span>
+    <% } %>
+  </span>
+  <input
+    id="<%= inputName %>"
+    type="<%= inputType %>"
+    <% if (locals.step) { %>step="<%= step %>"<% } %>
+    name="<%= inputName %>"
+    value="<%= fieldValue || '' %>"
+    <% if (isInvalid) { %>aria-invalid="true" aria-describedby="<%= errorId %>"<% } %>
+    <%- readOnlyAttributes %>
+  >
+  <% if (isInvalid) { %>
+    <span class="review-field-errors" id="<%= errorId %>">
+      <% errors.forEach((message) => { %>
+        <span><%= message %></span>
+      <% }) %>
+    </span>
+  <% } %>
+</label>

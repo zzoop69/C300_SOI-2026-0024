@@ -1,0 +1,341 @@
+<%- include("partials/header") %>
+
+<%
+  const money = (value) => Number(value || 0).toFixed(2);
+  const statusClass = (value) => String(value || "neutral").toLowerCase().replaceAll(" ", "-");
+  const uploadedRecords = stats.totalUploadedDocumentSets || stats.totalRecords || 0;
+  const matchedRecords = stats.matched || 0;
+  const mismatchedRecords = stats.mismatched || 0;
+  const readyForPayment = stats.readyForPayment || stats.approvedPayments || 0;
+  const paymentHeld = stats.paymentHeld !== undefined ? stats.paymentHeld : stats.pendingPayments || 0;
+  const validationIssues = stats.validationIssues || stats.invalid || 0;
+  const needsAttention = Math.max(mismatchedRecords, validationIssues, paymentHeld);
+  const recentRecords = records.map((record) => ({
+    id: record.id,
+    invoiceNumber: record.invoice?.invoiceNumber || "Missing",
+    supplier: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
+    poNumber: record.purchaseOrder?.poNumber || "Missing",
+    doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
+    amount: money(record.amountPayable),
+    matchStatus: record.matching?.status || "Not Reviewed",
+    validationStatus: record.validation?.status || "Not Reviewed",
+    paymentStatus: record.paymentStatus || "Pending Approval",
+    issueCount: record.unresolvedDiscrepancies?.length || record.discrepancies?.length || 0,
+    invoiceDate: record.invoice?.documentDate || record.createdAt || "",
+  }));
+%>
+
+<section class="dashboard-meta" aria-label="Dashboard metadata">
+  <span>Last Updated: <time id="lastUpdated">Loading...</time></span>
+  <span>Data Source: Uploaded Excel files and saved JSON records</span>
+</section>
+
+<section class="workflow-strip dashboard-workflow" aria-label="Payment checking workflow">
+  <div><span>1</span> Upload Excel</div>
+  <div><span>2</span> Review Data</div>
+  <div><span>3</span> Validate</div>
+  <div><span>4</span> Match</div>
+  <div><span>5</span> Pay Demo</div>
+</section>
+
+<section class="dashboard-kpis" aria-label="Key dashboard metrics">
+  <article class="kpi-card info">
+    <div><span class="kpi-dot"></span><p>Uploaded Records</p></div>
+    <strong><%= uploadedRecords %></strong>
+  </article>
+  <article class="kpi-card success">
+    <div><span class="kpi-dot"></span><p>Matched Records</p></div>
+    <strong><%= matchedRecords %></strong>
+  </article>
+  <article class="kpi-card danger">
+    <div><span class="kpi-dot"></span><p>Mismatched Records</p></div>
+    <strong><%= mismatchedRecords %></strong>
+  </article>
+  <article class="kpi-card success">
+    <div><span class="kpi-dot"></span><p>Ready for Payment</p></div>
+    <strong><%= readyForPayment %></strong>
+  </article>
+  <article class="kpi-card held">
+    <div><span class="kpi-dot"></span><p>Payment Held</p></div>
+    <strong><%= paymentHeld %></strong>
+  </article>
+  <article class="kpi-card paid">
+    <div><span class="kpi-dot"></span><p>Total Amount Paid</p></div>
+    <strong>$<%= money(stats.totalAmountPaid) %></strong>
+  </article>
+</section>
+
+<section class="dashboard-summary" aria-label="Dashboard summary">
+  <p>
+    <strong><%= uploadedRecords %></strong> invoices uploaded.
+    <strong><%= matchedRecords %></strong> matched successfully.
+    <strong><%= needsAttention %></strong> need attention.
+    <strong><%= readyForPayment %></strong> <%= readyForPayment === 1 ? "invoice is" : "invoices are" %> ready for payment.
+  </p>
+  <span><%= validationIssues %> validation <%= validationIssues === 1 ? "issue" : "issues" %> found.</span>
+</section>
+
+<section class="dashboard-main-grid">
+  <section class="panel dashboard-records-panel">
+    <div class="section-heading">
+      <div>
+        <h2>Recent Excel Records</h2>
+        <p>Latest invoice records from uploaded Excel data.</p>
+      </div>
+      <a class="button compact-button" href="/upload">Upload Documents</a>
+    </div>
+
+    <% if (records.length === 0) { %>
+      <div class="empty-state">No records yet. Upload a Purchase Order, Delivery Order, and Supplier Invoice Excel file to begin.</div>
+    <% } else { %>
+      <div class="record-tools">
+        <label>
+          <span>Search records</span>
+          <input id="recordSearch" type="search" placeholder="Search invoice or supplier">
+        </label>
+        <fieldset class="status-filter-group" aria-label="Filter recent records by status">
+          <legend>Filter by Status</legend>
+          <div class="status-filter-select-wrap">
+            <select id="statusFilterSelect" class="status-filter-select">
+              <option value="all|all" selected>All</option>
+              <option value="match|Matched">Matched</option>
+              <option value="match|Mismatch">Mismatched</option>
+              <option value="payment|Payment Held">Payment Held</option>
+              <option value="payment|Approved for Payment">Approved for Payment</option>
+            </select>
+          </div>
+          <div class="status-filter-tabs" hidden>
+            <button class="status-filter-tab active" type="button" data-status-type="all" data-status-value="all" aria-pressed="true">All</button>
+            <button class="status-filter-tab" type="button" data-status-type="match" data-status-value="Matched" aria-pressed="false">Matched</button>
+            <button class="status-filter-tab" type="button" data-status-type="match" data-status-value="Mismatch" aria-pressed="false">Mismatched</button>
+            <button class="status-filter-tab" type="button" data-status-type="payment" data-status-value="Payment Held" aria-pressed="false">Payment Held</button>
+            <button class="status-filter-tab" type="button" data-status-type="payment" data-status-value="Approved for Payment" aria-pressed="false">Approved for Payment</button>
+          </div>
+        </fieldset>
+        <label>
+          <span>Rows per page</span>
+          <select id="pageSize">
+            <option value="5">5 records</option>
+            <option value="10" selected>10 records</option>
+            <option value="25">25 records</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="table-wrap dashboard-table-wrap">
+        <table class="dashboard-table">
+          <thead>
+            <tr>
+              <th>Invoice No</th>
+              <th>Supplier</th>
+              <th>Amount</th>
+              <th>Match Status</th>
+              <th>Validation Status</th>
+              <th>Payment Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="recentRecordsBody">
+            <% records.forEach((record) => { %>
+              <tr
+                data-search="<%= `${record.invoice?.invoiceNumber || ""} ${record.invoice?.supplierName || ""} ${record.purchaseOrder?.supplierName || ""}`.toLowerCase() %>"
+                data-payment-status="<%= record.paymentStatus || "Pending Approval" %>"
+                data-match-status="<%= record.matching?.status || "Not Reviewed" %>"
+              >
+                <td><%= record.invoice?.invoiceNumber || "Missing" %></td>
+                <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review" %></td>
+                <td>$<%= money(record.amountPayable) %></td>
+                <td><span class="status <%= statusClass(record.matching?.status) %>"><%= record.matching?.status || "Not Reviewed" %></span></td>
+                <td><span class="status <%= statusClass(record.validation?.status) %>"><%= record.validation?.status || "Not Reviewed" %></span></td>
+                <td><span class="status <%= statusClass(record.paymentStatus) %>"><%= record.paymentStatus || "Pending Approval" %></span></td>
+                <td class="action-cell">
+                  <a class="table-link" href="/matching-results/<%= encodeURIComponent(record.id) %>">View Details</a>
+                  <button class="details-button" type="button" data-record-id="<%= record.id %>">Quick View</button>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-bar" aria-label="Recent records pagination">
+        <p id="paginationInfo"></p>
+        <div class="pagination-actions">
+          <button class="details-button" id="prevPage" type="button">Previous</button>
+          <span id="pageIndicator"></span>
+          <button class="details-button" id="nextPage" type="button">Next</button>
+        </div>
+      </div>
+    <% } %>
+  </section>
+</section>
+
+<div class="modal-backdrop" id="recordModal" hidden>
+  <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle">
+    <div class="modal-heading">
+      <div>
+        <span>Record Details</span>
+        <h2 id="recordModalTitle">Invoice</h2>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close details modal">&times;</button>
+    </div>
+    <dl class="details-list" id="recordModalDetails"></dl>
+  </section>
+</div>
+
+<script>
+  const recentRecords = <%- JSON.stringify(recentRecords) %>;
+</script>
+<script>
+  const lastUpdated = document.getElementById("lastUpdated");
+  const searchInput = document.getElementById("recordSearch");
+  const statusFilterSelect = document.getElementById("statusFilterSelect");
+  const statusFilterTabs = [...document.querySelectorAll(".status-filter-tab")];
+  const pageSizeSelect = document.getElementById("pageSize");
+  const paginationInfo = document.getElementById("paginationInfo");
+  const pageIndicator = document.getElementById("pageIndicator");
+  const prevPage = document.getElementById("prevPage");
+  const nextPage = document.getElementById("nextPage");
+  const recordRows = [...document.querySelectorAll("#recentRecordsBody tr")];
+  const modal = document.getElementById("recordModal");
+  const modalTitle = document.getElementById("recordModalTitle");
+  const modalDetails = document.getElementById("recordModalDetails");
+  let currentPage = 1;
+
+  if (lastUpdated) {
+    lastUpdated.textContent = new Date().toLocaleString();
+  }
+
+  function matchingRows() {
+    const searchTerm = (searchInput?.value || "").trim().toLowerCase();
+    const activeStatusFilter = document.querySelector(".status-filter-tab.active");
+    const statusType = activeStatusFilter?.dataset.statusType || "all";
+    const statusValue = activeStatusFilter?.dataset.statusValue || "all";
+
+    return recordRows.filter((row) => {
+      const matchesSearch = row.dataset.search.includes(searchTerm);
+      const matchesStatus =
+        statusType === "all" ||
+        (statusType === "match" && row.dataset.matchStatus === statusValue) ||
+        (statusType === "payment" && row.dataset.paymentStatus === statusValue);
+
+      return matchesSearch && matchesStatus;
+    });
+  }
+
+  function renderRecords() {
+    const filteredRows = matchingRows();
+    const pageSize = Number(pageSizeSelect?.value || 10);
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+
+    currentPage = Math.min(currentPage, totalPages);
+
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const visibleRows = new Set(filteredRows.slice(startIndex, endIndex));
+
+    recordRows.forEach((row) => {
+      row.hidden = !visibleRows.has(row);
+    });
+
+    if (paginationInfo) {
+      const firstVisible = filteredRows.length ? startIndex + 1 : 0;
+      const lastVisible = Math.min(endIndex, filteredRows.length);
+      paginationInfo.textContent = `Showing ${firstVisible}-${lastVisible} of ${filteredRows.length} records`;
+    }
+
+    if (pageIndicator) {
+      pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    if (prevPage) {
+      prevPage.disabled = currentPage === 1;
+    }
+
+    if (nextPage) {
+      nextPage.disabled = currentPage === totalPages;
+    }
+  }
+
+  function resetAndRenderRecords() {
+    currentPage = 1;
+    renderRecords();
+  }
+
+  searchInput?.addEventListener("input", resetAndRenderRecords);
+  statusFilterTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      statusFilterTabs.forEach((tab) => {
+        const isActive = tab === button;
+        tab.classList.toggle("active", isActive);
+        tab.setAttribute("aria-pressed", String(isActive));
+      });
+      resetAndRenderRecords();
+    });
+  });
+  statusFilterSelect?.addEventListener("change", () => {
+    const [statusType, statusValue] = statusFilterSelect.value.split("|");
+    const matchingTab = statusFilterTabs.find((tab) => (
+      tab.dataset.statusType === statusType && tab.dataset.statusValue === statusValue
+    ));
+
+    matchingTab?.click();
+  });
+  pageSizeSelect?.addEventListener("change", resetAndRenderRecords);
+  prevPage?.addEventListener("click", () => {
+    currentPage -= 1;
+    renderRecords();
+  });
+  nextPage?.addEventListener("click", () => {
+    currentPage += 1;
+    renderRecords();
+  });
+
+  renderRecords();
+
+  document.querySelectorAll(".details-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const record = recentRecords.find((item) => String(item.id) === String(button.dataset.recordId));
+
+      if (!record) {
+        return;
+      }
+
+      modalTitle.textContent = record.invoiceNumber;
+      modalDetails.replaceChildren();
+      [
+        ["Supplier", record.supplier],
+        ["PO No", record.poNumber],
+        ["DO No", record.doGrnNumber],
+        ["Amount", `$${record.amount}`],
+        ["Match Status", record.matchStatus],
+        ["Validation Status", record.validationStatus],
+        ["Payment Status", record.paymentStatus],
+        ["Validation/Match Issues", record.issueCount],
+        ["Invoice Date", record.invoiceDate || "-"],
+      ].forEach(([label, value]) => {
+        const row = document.createElement("div");
+        const term = document.createElement("dt");
+        const description = document.createElement("dd");
+
+        term.textContent = label;
+        description.textContent = value;
+        row.append(term, description);
+        modalDetails.append(row);
+      });
+      modal.hidden = false;
+    });
+  });
+
+  document.querySelector(".modal-close")?.addEventListener("click", () => {
+    modal.hidden = true;
+  });
+
+  modal?.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      modal.hidden = true;
+    }
+  });
+
+</script>
+
+<%- include("partials/footer") %>

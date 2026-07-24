@@ -1,0 +1,165 @@
+[
+  {
+    "id": 1,
+    "createdAt": "2026-05-20T04:41:36.758Z",
+    "purchaseOrderFile": {
+      "originalName": "purchase_order_template.xlsx",
+      "storedName": "82949804e01878541842c9e0de79c7b4",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\82949804e01878541842c9e0de79c7b4",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "invoiceFile": {
+      "originalName": "supplier_invoice_with_data.xlsx",
+      "storedName": "d0315f6bbc3f708b1036d6f99486e2ff",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\d0315f6bbc3f708b1036d6f99486e2ff",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "purchaseOrder": {
+      "supplierName": "ABC Supplies",
+      "poNumber": "PO001",
+      "itemDescription": "5kg bag",
+      "quantityOrdered": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
+    },
+    "invoice": {
+      "supplierName": "ABC Supplies",
+      "poNumber": "ORD001",
+      "invoiceNumber": "INV001",
+      "itemDescription": "5kg bag",
+      "quantityBilled": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
+    },
+    "extractionStatus": "Extracted",
+    "paymentStatus": "Rejected",
+    "payment": null,
+    "deliveryOrderFile": null,
+    "deliveryOrder": {
+      "supplierName": "",
+      "poNumber": "",
+      "doGrnNumber": "",
+      "itemDescription": "",
+      "quantityReceived": "",
+      "documentDate": ""
+    },
+    "approvalStatus": "Rejected",
+    "rejectedAt": "2026-05-25T03:26:20.930Z"
+  },
+  {
+    "id": 2,
+    "createdAt": "2026-05-20T15:50:40.428Z",
+    "purchaseOrderFile": {
+      "originalName": "purchase_order_template.xlsx",
+      "storedName": "d2a6167c7a4a357002b8921e67a876ad",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\d2a6167c7a4a357002b8921e67a876ad",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "deliveryOrderFile": {
+      "originalName": "DO_GRN_Sample.xlsx",
+      "storedName": "2df4f790f8bc0fabf3004f720bc66482",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\2df4f790f8bc0fabf3004f720bc66482",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "invoiceFile": {
+      "originalName": "supplier_invoice_with_data.xlsx",
+      "storedName": "aa60dfcde46f856af90bb17086f3601b",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\aa60dfcde46f856af90bb17086f3601b",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "purchaseOrder": {
+      "supplierName": "ABC Supplies",
+      "poNumber": "PO001",
+      "itemDescription": "5kg bag",
+      "quantityOrdered": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-04-20"
+    },
+    "deliveryOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-015",
+      "doGrnNumber": "GRN-2026-001",
+      "itemDescription": "Office Chair",
+      "quantityReceived": "50",
+      "documentDate": "2026-04-20"
+    },
+    "invoice": {
+      "supplierName": "ABC Supplies",
+      "poNumber": "ORD001",
+      "invoiceNumber": "INV001",
+      "itemDescription": "5kg bag",
+      "quantityBilled": "10",
+      "unitPrice": "20",
+      "totalAmount": "218",
+      "documentDate": "2026-04-20"
+    },
+    "extractionStatus": "Reviewed",
+    "paymentStatus": "Rejected",
+    "approvalStatus": "Rejected",
+    "payment": null,
+    "rejectedAt": "2026-05-25T03:26:18.678Z"
+  },
+  {
+    "id": 3,
+    "createdAt": "2026-05-20T15:55:41.865Z",
+    "purchaseOrderFile": {
+      "originalName": "MATCHED_PO.xlsx",
+      "storedName": "bf18cedac27fca14c79e95176bff1ac3",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\bf18cedac27fca14c79e95176bff1ac3",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "deliveryOrderFile": {
+      "originalName": "MATCHED_DO_GRN.xlsx",
+      "storedName": "b8b240ba9f77a551709bc8506febe7eb",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\b8b240ba9f77a551709bc8506febe7eb",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "invoiceFile": {
+      "originalName": "MATCHED_SUPPLIER_INVOICE.xlsx",
+      "storedName": "1d1ac9f6fd68390c18e20a855756fa52",
+      "path": "C:\\C300 fyp\\C300_SOI-2026-0024\\uploads\\1d1ac9f6fd68390c18e20a855756fa52",
+      "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    "purchaseOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityOrdered": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-05-20"
+    },
+    "deliveryOrder": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "doGrnNumber": "GRN-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityReceived": "10",
+      "documentDate": "2026-05-20"
+    },
+    "invoice": {
+      "supplierName": "ABC Supplies Pte Ltd",
+      "poNumber": "PO-2026-001",
+      "invoiceNumber": "INV-2026-001",
+      "itemDescription": "5kg Rice Bag",
+      "quantityBilled": "10",
+      "unitPrice": "20",
+      "totalAmount": "200",
+      "documentDate": "2026-05-22"
+    },
+    "extractionStatus": "Reviewed",
+    "paymentStatus": "Paid",
+    "approvalStatus": "Approved",
+    "payment": {
+      "transactionId": "PAY-2026-0002",
+      "method": "Demo Bank Transfer",
+      "amountPaid": "200",
+      "paidAt": "2026-05-20T15:56:54.281Z",
+      "status": "Paid"
+    },
+    "approvedAt": "2026-05-20T15:56:52.026Z"
+  }
+]

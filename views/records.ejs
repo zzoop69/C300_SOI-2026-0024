@@ -1,0 +1,171 @@
+<%- include("partials/header") %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Extracted Data Records</h2>
+      <p>Select a saved record to review or correct the extracted Excel fields.</p>
+    </div>
+    <a class="button" href="/upload">Upload New Files</a>
+  </div>
+
+  <% if (records.length === 0) { %>
+    <div class="empty-state">No extracted records yet.</div>
+  <% } else { %>
+    <div class="review-record-tools">
+      <label class="review-supplier-search">
+        <span>Search by supplier name</span>
+        <input id="reviewSupplierSearch" type="search" placeholder="Enter supplier name" autocomplete="off">
+      </label>
+      <fieldset class="review-date-range">
+        <legend>Uploaded date range</legend>
+        <label>
+          <span>From</span>
+          <input id="reviewDateFrom" type="date">
+        </label>
+        <label>
+          <span>To</span>
+          <input id="reviewDateTo" type="date">
+        </label>
+      </fieldset>
+      <label>
+        <span>Sort by uploaded date</span>
+        <select id="reviewDateSort">
+          <option value="newest" selected>Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="reviewRecordsEmpty" class="empty-state" hidden>No extracted records match these filters.</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Record</th>
+            <th>Uploaded</th>
+            <th>PO File</th>
+            <th>DO File</th>
+            <th>Invoice File</th>
+            <th>Supplier</th>
+            <th>Status</th>
+            <th>Review</th>
+          </tr>
+        </thead>
+        <tbody id="reviewRecordsBody">
+          <% records.forEach((record) => { %>
+            <tr
+              data-supplier="<%= (record.invoice?.supplierName || record.purchaseOrder?.supplierName || "").toLowerCase() %>"
+              data-upload-date="<%= String(record.createdAt || "").slice(0, 10) %>"
+            >
+              <td>#<%= record.id %></td>
+              <td><%= new Date(record.createdAt).toLocaleDateString() %></td>
+              <td><%= record.purchaseOrderFile?.originalName || "Missing" %></td>
+              <td><%= record.deliveryOrderFile?.originalName || "Missing" %></td>
+              <td><%= record.invoiceFile?.originalName || "Missing" %></td>
+              <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review" %></td>
+              <td><span class="status <%= record.extractionStatus.toLowerCase().replaceAll(' ', '-') %>"><%= record.extractionStatus %></span></td>
+              <td><a class="table-link" href="/extract/<%= record.id %>?from=extracted-data">Open review</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" aria-label="Extracted data review pagination">
+      <p id="reviewPaginationInfo"></p>
+      <div class="pagination-actions">
+        <button class="details-button" id="reviewPreviousPage" type="button">Previous</button>
+        <span id="reviewPageIndicator"></span>
+        <button class="details-button" id="reviewNextPage" type="button">Next</button>
+      </div>
+    </div>
+  <% } %>
+</section>
+
+<script>
+  (() => {
+    const supplierSearch = document.getElementById("reviewSupplierSearch");
+    const dateFrom = document.getElementById("reviewDateFrom");
+    const dateTo = document.getElementById("reviewDateTo");
+    const dateSort = document.getElementById("reviewDateSort");
+    const tableBody = document.getElementById("reviewRecordsBody");
+    const rows = [...document.querySelectorAll("#reviewRecordsBody tr")];
+    const emptyState = document.getElementById("reviewRecordsEmpty");
+    const paginationInfo = document.getElementById("reviewPaginationInfo");
+    const pageIndicator = document.getElementById("reviewPageIndicator");
+    const previousPage = document.getElementById("reviewPreviousPage");
+    const nextPage = document.getElementById("reviewNextPage");
+    const pageSize = 10;
+    let currentPage = 1;
+
+    if (!tableBody) return;
+
+    function matchingRows() {
+      const supplierTerm = (supplierSearch?.value || "").trim().toLowerCase();
+      const fromValue = dateFrom?.value || "";
+      const toValue = dateTo?.value || "";
+
+      return rows
+        .filter((row) => {
+          const uploadedDate = row.dataset.uploadDate || "";
+          const matchesSupplier = !supplierTerm || row.dataset.supplier.includes(supplierTerm);
+          const matchesFrom = !fromValue || uploadedDate >= fromValue;
+          const matchesTo = !toValue || uploadedDate <= toValue;
+          return matchesSupplier && matchesFrom && matchesTo;
+        })
+        .sort((left, right) => {
+          const comparison = (left.dataset.uploadDate || "").localeCompare(right.dataset.uploadDate || "");
+          return dateSort?.value === "oldest" ? comparison : -comparison;
+        });
+    }
+
+    function renderRecords() {
+      const filteredRows = matchingRows();
+      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const visibleRows = new Set(filteredRows.slice(startIndex, endIndex));
+
+      filteredRows.forEach((row) => tableBody.appendChild(row));
+      rows.forEach((row) => {
+        row.hidden = !visibleRows.has(row);
+      });
+
+      if (emptyState) emptyState.hidden = filteredRows.length !== 0;
+      const firstVisible = filteredRows.length ? startIndex + 1 : 0;
+      const lastVisible = Math.min(endIndex, filteredRows.length);
+      paginationInfo.textContent = `Showing ${firstVisible}\u2013${lastVisible} of ${filteredRows.length} records.`;
+      pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+      previousPage.disabled = currentPage === 1;
+      nextPage.disabled = currentPage === totalPages;
+    }
+
+    function resetAndRender() {
+      currentPage = 1;
+      renderRecords();
+    }
+
+    supplierSearch?.addEventListener("input", resetAndRender);
+    dateFrom?.addEventListener("change", resetAndRender);
+    dateTo?.addEventListener("change", resetAndRender);
+    dateSort?.addEventListener("change", resetAndRender);
+    previousPage?.addEventListener("click", () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        renderRecords();
+      }
+    });
+    nextPage?.addEventListener("click", () => {
+      const totalPages = Math.max(1, Math.ceil(matchingRows().length / pageSize));
+      if (currentPage < totalPages) {
+        currentPage += 1;
+        renderRecords();
+      }
+    });
+
+    renderRecords();
+  })();
+</script>
+
+<%- include("partials/footer") %>

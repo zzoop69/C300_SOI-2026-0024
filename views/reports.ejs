@@ -1,0 +1,157 @@
+<%- include("partials/header") %>
+
+<section class="report-summary">
+  <div><span>Uploaded Sets</span><strong><%= stats.totalUploadedDocumentSets %></strong></div>
+  <div><span>Matched</span><strong><%= stats.matched %></strong></div>
+  <div><span>Mismatched</span><strong><%= stats.mismatched %></strong></div>
+  <div><span>Pending Review</span><strong><%= stats.pendingReview %></strong></div>
+  <div><span>Discrepancies</span><strong><%= stats.discrepancies %></strong></div>
+  <div><span>Total Paid</span><strong>$<%= Number(stats.totalAmountPaid || 0).toFixed(2) %></strong></div>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Matching History</h2>
+      <p>Generated from saved upload records.</p>
+    </div>
+    <a class="button compact-button" href="/reports/matching-history.xlsx">Export Matching History</a>
+  </div>
+
+  <% if (rows.length === 0) { %>
+    <div class="empty-state">No saved records are available for reporting.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Record</th>
+            <th>Supplier</th>
+            <th>PO</th>
+            <th>DO</th>
+            <th>Invoice</th>
+            <th>Amount</th>
+            <th>Match</th>
+            <th>Validation</th>
+            <th>Approval</th>
+            <th>Payment</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach((row) => { %>
+            <tr>
+              <td>#<%= row.id %></td>
+              <td><%= row.supplierName %></td>
+              <td><%= row.poNumber %></td>
+              <td><%= row.doGrnNumber %></td>
+              <td><%= row.invoiceNumber %></td>
+              <td>$<%= Number(row.amount || 0).toFixed(2) %></td>
+              <td><span class="status <%= row.matchStatus.toLowerCase().replaceAll(' ', '-') %>"><%= row.matchStatus %></span></td>
+              <td><span class="status <%= row.validationStatus.toLowerCase().replaceAll(' ', '-') %>"><%= row.validationStatus %></span></td>
+              <td><%= row.approvalStatus %></td>
+              <td><%= row.paymentStatus %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Discrepancy Report</h2>
+      <p>Each discrepancy is generated dynamically from the PO, DO, and Supplier Invoice values.</p>
+    </div>
+  </div>
+
+  <% if (discrepancies.length === 0) { %>
+    <div class="empty-state">No discrepancies found.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Record</th>
+            <th>Supplier</th>
+            <th>PO</th>
+            <th>DO</th>
+            <th>Invoice</th>
+            <th>Mismatch Field</th>
+            <th>PO Value</th>
+            <th>DO Value</th>
+            <th>Invoice Value</th>
+            <th>Type</th>
+            <th>Recommended Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% discrepancies.forEach((row) => { %>
+            <tr>
+              <td>#<%= row.recordId %></td>
+              <td><%= row.supplierName %></td>
+              <td><%= row.poNumber %></td>
+              <td><%= row.doGrnNumber %></td>
+              <td><%= row.invoiceNumber %></td>
+              <td><%= row.field %></td>
+              <td><%= row.poValue %></td>
+              <td><%= row.doGrnValue %></td>
+              <td><%= row.invoiceValue %></td>
+              <td><%= row.type %></td>
+              <td><%= row.action %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Payment History</h2>
+      <p>Demo payment statuses, action dates, methods, and transaction IDs.</p>
+    </div>
+  </div>
+
+  <% if (rows.length === 0) { %>
+    <div class="empty-state">No records found.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier ID</th>
+            <th>Supplier Name</th>
+            <th>Invoice Number</th>
+            <th>PO Number</th>
+            <th>Amount</th>
+            <th>Payment Status</th>
+            <th>Action Date</th>
+            <th>Payment Method</th>
+            <th>PayPal Transaction ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach((row) => { %>
+            <tr>
+              <td><%= row.supplierId || "-" %></td>
+              <td><%= row.supplierName %></td>
+              <td><%= row.invoiceNumber %></td>
+              <td><%= row.poNumber %></td>
+              <td>$<%= Number(row.amount || 0).toFixed(2) %></td>
+              <td><span class="status <%= row.paymentStatus.toLowerCase().replaceAll(' ', '-') %>"><%= row.paymentStatus %></span></td>
+              <td><%= row.actionDate ? new Date(row.actionDate).toLocaleString() : "-" %></td>
+              <td><%= row.paymentMethod %></td>
+              <td><%= row.transactionId %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<%- include("partials/footer") %>

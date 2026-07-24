@@ -1,0 +1,513 @@
+<%- include("partials/header") %>
+
+<%
+  const sets = pendingDocumentSets || [];
+  const selectedSet = selectedPendingSet || null;
+  const uploadSections = [
+    {
+      type: "purchaseOrder",
+      inputName: "poFile",
+      title: "Purchase Order",
+      description: "Upload the PO Excel file when the order is received.",
+      missingLabel: "Purchase Order",
+    },
+    {
+      type: "deliveryOrder",
+      inputName: "doGrnFile",
+      title: "Delivery Order",
+      description: "Upload the DO file when goods are received.",
+      missingLabel: "DO",
+    },
+    {
+      type: "invoice",
+      inputName: "invoiceFile",
+      title: "Supplier Invoice",
+      description: "Upload the supplier invoice when billing arrives.",
+      missingLabel: "Supplier Invoice",
+    },
+  ];
+  const selectedMissingTypes = selectedSet?.missingDocuments || [];
+  const formatDate = (value) => value ? new Date(value).toLocaleString() : "-";
+  const showUploadSuccessPopup = successMessage === "Documents uploaded successfully!";
+%>
+
+<% if (successMessage && !showUploadSuccessPopup) { %>
+  <div class="notice success-notice"><%= successMessage %></div>
+<% } %>
+
+<% if (holdMessage) { %>
+  <div class="notice warning-notice"><%= holdMessage %></div>
+<% } %>
+
+<% if (completedMessage) { %>
+  <div class="notice success-notice"><%= completedMessage %></div>
+<% } %>
+
+<% if (errorMessage) { %>
+  <div class="notice"><%= errorMessage %></div>
+<% } %>
+
+<section class="panel excel-guide-panel">
+  <div class="section-heading compact-heading">
+    <div>
+      <h2>Excel Column Guide</h2>
+      <p>Prepare each Excel file with these columns before uploading.</p>
+    </div>
+  </div>
+
+  <div class="excel-guide-grid">
+    <article class="excel-guide-card">
+      <h3>Purchase Order</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>Item Description</li>
+        <li>Quantity Ordered</li>
+        <li>Unit Price</li>
+        <li>Total Amount</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+
+    <article class="excel-guide-card">
+      <h3>Delivery Order</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>DO Number</li>
+        <li>Item Description</li>
+        <li>Quantity Received</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+
+    <article class="excel-guide-card">
+      <h3>Supplier Invoice</h3>
+      <ul>
+        <li>Supplier Name</li>
+        <li>PO Number</li>
+        <li>Invoice Number</li>
+        <li>Item Description</li>
+        <li>Quantity Billed</li>
+        <li>Unit Price</li>
+        <li>Total Amount</li>
+        <li>Document Date</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="panel upload-document-panel">
+  <div class="section-heading">
+    <div>
+      <h2>Upload Document</h2>
+      <p>Select the available files. The system only extracts when all three documents are uploaded.</p>
+    </div>
+  </div>
+
+  <% if (selectedSet) { %>
+    <div class="selected-upload-set">
+      <strong>Adding to PO <%= selectedSet.poNumber %></strong>
+      <span>Select one of the missing sections below: <%= selectedSet.missingDocuments.join(", ") || "No missing documents" %></span>
+    </div>
+  <% } %>
+
+  <% if (selectedSet) { %>
+    <% uploadSections.forEach((section) => { %>
+      <% if (selectedSet.documents?.[section.type]) { %>
+        <form
+          id="delete-uploaded-<%= section.type %>"
+          action="/pending-document-sets/<%= encodeURIComponent(selectedSet.id) %>/documents/<%= encodeURIComponent(section.type) %>/delete"
+          method="POST"
+          hidden
+        ></form>
+      <% } %>
+    <% }) %>
+  <% } %>
+
+  <form id="documentSetForm" action="/upload" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="pendingSetId" value="<%= selectedSet?.id || "" %>">
+    <input type="hidden" name="holdIncomplete" id="holdIncomplete" value="">
+
+    <div class="section-upload-grid">
+      <% uploadSections.forEach((section) => {
+      const uploadedDocument = selectedSet?.documents?.[section.type];
+      const isAlreadyUploaded = Boolean(uploadedDocument);
+      const shouldShowForSelectedSet = !selectedSet || selectedMissingTypes.includes(section.missingLabel);
+      %>
+        <section
+          class="document-upload-section <%= isAlreadyUploaded ? "is-uploaded" : "" %>"
+          data-document-label="<%= section.missingLabel %>"
+          data-existing="<%= isAlreadyUploaded ? "true" : "false" %>"
+          <%= shouldShowForSelectedSet ? "" : "hidden" %>
+        >
+          <div>
+            <span class="upload-section-badge"><%= isAlreadyUploaded ? "Uploaded" : "Excel upload" %></span>
+            <h3><%= section.title %></h3>
+            <p><%= section.description %></p>
+            <% if (isAlreadyUploaded) { %>
+              <div class="previous-upload-file">
+                <div>
+                  <span>Previously uploaded</span>
+                  <strong><%= uploadedDocument.file?.originalName || "Saved Excel file" %></strong>
+                </div>
+                <button
+                  class="uploaded-file-delete"
+                  type="submit"
+                  form="delete-uploaded-<%= section.type %>"
+                  aria-label="Delete <%= section.title %>"
+                  title="Remove uploaded file"
+                  onclick="return confirm('Delete this uploaded <%= section.title %> file from the pending set?');"
+                >&times;</button>
+              </div>
+            <% } %>
+          </div>
+
+          <% if (!isAlreadyUploaded) { %>
+            <div class="upload-box single-file-box">
+              <label for="<%= section.inputName %>">
+                <span>Select file</span>
+                <small>Accepted file types: .xlsx, .xls, and .csv.</small>
+              </label>
+              <div class="selected-file-control">
+                <input id="<%= section.inputName %>" type="file" name="<%= section.inputName %>" accept=".xlsx,.xls,.csv">
+                <button
+                  class="selected-file-clear"
+                  type="button"
+                  aria-label="Remove selected <%= section.title %> file"
+                  title="Remove selected file"
+                  hidden
+                >&times;</button>
+              </div>
+            </div>
+          <% } %>
+        </section>
+      <% }) %>
+    </div>
+
+    <div class="form-actions upload-actions">
+      <button type="submit">Upload</button>
+      <% if (selectedSet) { %>
+        <a class="table-link" href="/upload">Cancel selected set</a>
+      <% } %>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Documents On Hold</h2>
+      <p>Search pending document sets and add missing files when they arrive.</p>
+    </div>
+  </div>
+
+  <% if (sets.length === 0) { %>
+    <div class="empty-state">No document sets are currently on hold.</div>
+  <% } else { %>
+    <div class="hold-tools">
+      <label>
+        <span>Search PO or supplier</span>
+        <input id="holdSearch" type="search" placeholder="Search PO number or supplier">
+      </label>
+      <label>
+        <span>Last uploaded date</span>
+        <input id="holdDateFilter" type="date">
+      </label>
+      <fieldset class="hold-missing-filter">
+        <legend>Missing documents</legend>
+        <label>
+          <input type="checkbox" name="missingDocumentFilter" value="Purchase Order">
+          <span>Purchase Order</span>
+        </label>
+        <label>
+          <input type="checkbox" name="missingDocumentFilter" value="DO">
+          <span>DO</span>
+        </label>
+        <label>
+          <input type="checkbox" name="missingDocumentFilter" value="Supplier Invoice">
+          <span>Supplier Invoice</span>
+        </label>
+      </fieldset>
+    </div>
+
+    <div class="table-wrap hold-table-wrap">
+      <table class="hold-table">
+        <thead>
+          <tr>
+            <th>PO Number</th>
+            <th>Supplier Name</th>
+            <th>Uploaded Documents</th>
+            <th>Missing Documents</th>
+            <th>Last Uploaded Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% sets.forEach((set) => { %>
+            <tr
+              data-search="<%= `${set.poNumber} ${set.supplierName}`.toLowerCase() %>"
+              data-documents="<%= set.uploadedDocuments.join(" ") %>"
+              data-missing-documents="<%= set.missingDocuments.join("|") %>"
+              data-last-uploaded-at="<%= set.lastUploadedAt || "" %>"
+            >
+              <td><%= set.poNumber %></td>
+              <td><%= set.supplierName %></td>
+              <td>
+                <% if (set.uploadedDocuments.length) { %>
+                  <% set.uploadedDocuments.forEach((document) => { %>
+                    <span class="status uploaded"><%= document %></span>
+                  <% }) %>
+                <% } else { %>
+                  <span class="muted-text">None</span>
+                <% } %>
+              </td>
+              <td><%= set.missingDocumentText %></td>
+              <td><%= formatDate(set.lastUploadedAt) %></td>
+              <td class="hold-actions">
+                <% if (set.missingDocuments.length && !set.extractedRecordId) { %>
+                  <a class="button compact-button" href="/upload?set=<%= encodeURIComponent(set.id) %>">Add Missing Document</a>
+                <% } %>
+                <button class="details-button hold-details-button" type="button" data-set-id="<%= set.id %>">View Details</button>
+                <% if (!set.extractedRecordId) { %>
+                  <form action="/pending-document-sets/<%= encodeURIComponent(set.id) %>/delete" method="POST" onsubmit="return confirm('Delete this pending document set? Uploaded pending files for this set will be removed.');">
+                    <button class="details-button delete-set-button" type="submit">Delete Set</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<div class="modal-backdrop" id="holdDetailsModal" hidden>
+  <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="holdDetailsTitle">
+    <div class="modal-heading">
+      <div>
+        <span>Document Set Details</span>
+        <h2 id="holdDetailsTitle">Pending Set</h2>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close details modal">&times;</button>
+    </div>
+    <dl class="details-list" id="holdDetailsList"></dl>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="missingDocumentsModal" hidden>
+  <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="missingDocumentsTitle">
+    <div class="modal-heading">
+      <div>
+        <span>Incomplete Upload</span>
+        <h2 id="missingDocumentsTitle">Missing Documents</h2>
+      </div>
+      <button class="modal-close" id="missingModalClose" type="button" aria-label="Close missing documents modal">&times;</button>
+    </div>
+    <p class="helper-text">The full extraction can only start when all three documents are uploaded.</p>
+    <ul class="missing-document-list" id="missingDocumentList"></ul>
+    <div class="modal-actions">
+      <button class="details-button" id="goBackUpload" type="button">Go Back</button>
+      <button id="putOnHoldButton" type="button">Put On Hold</button>
+    </div>
+  </section>
+</div>
+
+<div class="upload-toast" id="uploadToast" <%= showUploadSuccessPopup ? "" : "hidden" %>>
+  <%= showUploadSuccessPopup ? successMessage : "Uploading documents..." %>
+</div>
+
+<script>
+  const pendingSets = <%- JSON.stringify(sets) %>;
+</script>
+<script>
+  const holdSearch = document.getElementById("holdSearch");
+  const holdDateFilter = document.getElementById("holdDateFilter");
+  const missingDocumentFilters = [...document.querySelectorAll("input[name='missingDocumentFilter']")];
+  const holdRows = [...document.querySelectorAll(".hold-table tbody tr")];
+  const holdDetailsModal = document.getElementById("holdDetailsModal");
+  const holdDetailsTitle = document.getElementById("holdDetailsTitle");
+  const holdDetailsList = document.getElementById("holdDetailsList");
+  const documentSetForm = document.getElementById("documentSetForm");
+  const holdIncomplete = document.getElementById("holdIncomplete");
+  const missingDocumentsModal = document.getElementById("missingDocumentsModal");
+  const missingDocumentList = document.getElementById("missingDocumentList");
+  const missingModalClose = document.getElementById("missingModalClose");
+  const goBackUpload = document.getElementById("goBackUpload");
+  const putOnHoldButton = document.getElementById("putOnHoldButton");
+  const uploadToast = document.getElementById("uploadToast");
+  let uploadToastTimeout;
+
+  document.querySelectorAll(".selected-file-control").forEach((control) => {
+    const input = control.querySelector("input[type='file']");
+    const clearButton = control.querySelector(".selected-file-clear");
+
+    const updateClearButton = () => {
+      clearButton.hidden = !input.files?.length;
+    };
+
+    input.addEventListener("change", updateClearButton);
+    clearButton.addEventListener("click", () => {
+      input.value = "";
+      updateClearButton();
+      input.focus();
+    });
+    updateClearButton();
+  });
+
+  function showUploadToast(message = "Documents uploaded successfully!") {
+    if (!uploadToast) {
+      return;
+    }
+
+    uploadToast.textContent = message;
+    uploadToast.hidden = false;
+    window.clearTimeout(uploadToastTimeout);
+    uploadToastTimeout = window.setTimeout(() => {
+      uploadToast.hidden = true;
+    }, 4500);
+  }
+
+  if (uploadToast && !uploadToast.hidden) {
+    showUploadToast(uploadToast.textContent.trim());
+  }
+
+  function dateInputValueFromTimestamp(value) {
+    if (!value) {
+      return "";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+  }
+
+  function filterHoldRows() {
+    const searchTerm = (holdSearch?.value || "").trim().toLowerCase();
+    const uploadedDate = holdDateFilter?.value || "";
+    const selectedMissingDocuments = missingDocumentFilters
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+
+    holdRows.forEach((row) => {
+      const matchesSearch = row.dataset.search.includes(searchTerm);
+      const matchesDate = !uploadedDate || dateInputValueFromTimestamp(row.dataset.lastUploadedAt) === uploadedDate;
+      const missingDocuments = (row.dataset.missingDocuments || "").split("|").filter(Boolean);
+      const matchesMissingDocuments = selectedMissingDocuments.length === 0 ||
+        selectedMissingDocuments.every((documentName) => missingDocuments.includes(documentName));
+
+      row.hidden = !matchesSearch || !matchesDate || !matchesMissingDocuments;
+    });
+  }
+
+  holdSearch?.addEventListener("input", filterHoldRows);
+  holdDateFilter?.addEventListener("change", filterHoldRows);
+  missingDocumentFilters.forEach((input) => input.addEventListener("change", filterHoldRows));
+
+  document.querySelectorAll(".hold-details-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const set = pendingSets.find((item) => item.id === button.dataset.setId);
+
+      if (!set) {
+        return;
+      }
+
+      holdDetailsTitle.textContent = set.poNumber;
+      holdDetailsList.replaceChildren();
+      [
+        ["Supplier", set.supplierName],
+        ["Uploaded Documents", set.uploadedDocumentText],
+        ["Missing Documents", set.missingDocumentText],
+        ["Status", set.status],
+        ["Document Count", `${set.documentCount}/3`],
+        ["Last Uploaded", set.lastUploadedAt ? new Date(set.lastUploadedAt).toLocaleString() : "-"],
+        ["Extracted Record", set.extractedRecordId || "-"],
+      ].forEach(([label, value]) => {
+        const row = document.createElement("div");
+        const term = document.createElement("dt");
+        const description = document.createElement("dd");
+
+        term.textContent = label;
+        description.textContent = value;
+        row.append(term, description);
+        holdDetailsList.append(row);
+      });
+
+      holdDetailsModal.hidden = false;
+    });
+  });
+
+  document.querySelector("#holdDetailsModal .modal-close")?.addEventListener("click", () => {
+    holdDetailsModal.hidden = true;
+  });
+
+  holdDetailsModal?.addEventListener("click", (event) => {
+    if (event.target === holdDetailsModal) {
+      holdDetailsModal.hidden = true;
+    }
+  });
+
+  function missingUploadDocuments() {
+    return [...document.querySelectorAll(".document-upload-section:not([hidden])")]
+      .filter((section) => {
+        const hasExistingDocument = section.dataset.existing === "true";
+        const input = section.querySelector("input[type='file']");
+        return !hasExistingDocument && (!input || input.files.length === 0);
+      })
+      .map((section) => section.dataset.documentLabel);
+  }
+
+  function showMissingDocuments(missingDocuments) {
+    missingDocumentList.replaceChildren();
+    missingDocuments.forEach((documentName) => {
+      const item = document.createElement("li");
+      item.textContent = `${documentName} has not been uploaded.`;
+      missingDocumentList.append(item);
+    });
+    missingDocumentsModal.hidden = false;
+    uploadToast.hidden = true;
+  }
+
+  documentSetForm?.addEventListener("submit", (event) => {
+    showUploadToast();
+    const missingDocuments = missingUploadDocuments();
+
+    if (holdIncomplete.value === "true") {
+      return;
+    }
+
+    if (missingDocuments.length) {
+      event.preventDefault();
+      showMissingDocuments(missingDocuments);
+      return;
+    }
+  });
+
+  goBackUpload?.addEventListener("click", () => {
+    missingDocumentsModal.hidden = true;
+  });
+
+  missingModalClose?.addEventListener("click", () => {
+    missingDocumentsModal.hidden = true;
+  });
+
+  putOnHoldButton?.addEventListener("click", () => {
+    holdIncomplete.value = "true";
+    missingDocumentsModal.hidden = true;
+    documentSetForm.submit();
+  });
+
+  missingDocumentsModal?.addEventListener("click", (event) => {
+    if (event.target === missingDocumentsModal) {
+      missingDocumentsModal.hidden = true;
+    }
+  });
+</script>
+
+<%- include("partials/footer") %>

@@ -1,0 +1,129 @@
+<%- include("partials/header") %>
+
+<% if (updated) { %>
+  <div class="notice success-notice">Changes saved and matching result updated.</div>
+<% } %>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <h2>Matching Details - <%= details.invoiceNumber %></h2>
+      <p>System-calculated 3-way matching result for this invoice only.</p>
+    </div>
+    <div class="button-row">
+      <a class="button secondary-button" href="/matching-results">Back to Matching Results</a>
+      <a class="button" href="/extract/<%= encodeURIComponent(details.invoiceId) %>">Edit Extracted Data</a>
+    </div>
+  </div>
+
+  <div class="detail-summary-grid">
+    <div>
+      <span>Supplier Name</span>
+      <strong><%= details.supplierName %></strong>
+    </div>
+    <div>
+      <span>Invoice Number</span>
+      <strong><%= details.invoiceNumber %></strong>
+    </div>
+    <div>
+      <span>PO Number</span>
+      <strong><%= details.poNumber %></strong>
+    </div>
+    <div>
+      <span>DO Number</span>
+      <strong><%= details.doGrnNumber %></strong>
+    </div>
+    <div>
+      <span>Overall Status</span>
+      <strong><span class="status <%= details.overallStatus.toLowerCase().replaceAll(' ', '-') %>"><%= details.overallStatus %></span></strong>
+    </div>
+    <div>
+      <span>Validation Status</span>
+      <strong><span class="status <%= details.validationStatus.toLowerCase().replaceAll(' ', '-') %>"><%= details.validationStatus %></span></strong>
+    </div>
+    <div>
+      <span>Discrepancy Count</span>
+      <strong><%= details.discrepancyCount %></strong>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="section-heading compact-heading">
+    <div>
+      <h2>3-Way Comparison</h2>
+      <p>Mismatch rows are highlighted for review.</p>
+    </div>
+  </div>
+
+  <% if (details.rows.length === 0) { %>
+    <div class="empty-state">Comparison rows are unavailable because a required document is missing.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Purchase Order</th>
+            <th>DO</th>
+            <th>Supplier Invoice</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% details.rows.forEach((row) => { %>
+            <tr class="<%= row.result === 'Mismatch' ? 'highlight-row' : '' %>">
+              <td><%= row.label %></td>
+              <td><%= row.poValue %></td>
+              <td><%= row.doGrnValue %></td>
+              <td><%= row.invoiceValue %></td>
+              <td><span class="status <%= row.result.toLowerCase() %>"><%= row.result %></span></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="panel">
+  <div class="section-heading compact-heading">
+    <div>
+      <h2>Discrepancies</h2>
+      <p>Use the recommended action to decide whether extracted data should be corrected or payment held.</p>
+    </div>
+  </div>
+
+  <% if (discrepancies.length === 0) { %>
+    <div class="empty-state success-empty">No discrepancies found for this invoice.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mismatch Field</th>
+            <th>PO Value</th>
+            <th>DO Value</th>
+            <th>Invoice Value</th>
+            <th>Discrepancy Type</th>
+            <th>Recommended Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% discrepancies.forEach((discrepancy) => { %>
+            <tr>
+              <td><strong><%= discrepancy.field %></strong></td>
+              <td><%= discrepancy.poValue %></td>
+              <td><%= discrepancy.doGrnValue %></td>
+              <td><%= discrepancy.invoiceValue %></td>
+              <td><%= discrepancy.type %></td>
+              <td><%= discrepancy.action %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<%- include("partials/footer") %>
