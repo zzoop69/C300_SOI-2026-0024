@@ -28,7 +28,7 @@
             <th>Record</th>
             <th>Supplier</th>
             <th>PO</th>
-            <th>DO/GRN</th>
+            <th>DO</th>
             <th>Invoice</th>
             <th>Amount</th>
             <th>Match</th>
@@ -62,7 +62,7 @@
   <div class="section-heading">
     <div>
       <h2>Discrepancy Report</h2>
-      <p>Each discrepancy is generated dynamically from the PO, DO/GRN, and Supplier Invoice values.</p>
+      <p>Each discrepancy is generated dynamically from the PO, DO, and Supplier Invoice values.</p>
     </div>
   </div>
 
@@ -76,11 +76,11 @@
             <th>Record</th>
             <th>Supplier</th>
             <th>PO</th>
-            <th>DO/GRN</th>
+            <th>DO</th>
             <th>Invoice</th>
             <th>Mismatch Field</th>
             <th>PO Value</th>
-            <th>DO/GRN Value</th>
+            <th>DO Value</th>
             <th>Invoice Value</th>
             <th>Type</th>
             <th>Recommended Action</th>
@@ -123,6 +123,7 @@
       <table>
         <thead>
           <tr>
+            <th>Supplier ID</th>
             <th>Supplier Name</th>
             <th>Invoice Number</th>
             <th>PO Number</th>
@@ -130,12 +131,13 @@
             <th>Payment Status</th>
             <th>Action Date</th>
             <th>Payment Method</th>
-            <th>Demo Transaction ID</th>
+            <th>PayPal Transaction ID</th>
           </tr>
         </thead>
         <tbody>
           <% rows.forEach((row) => { %>
             <tr>
+              <td><%= row.supplierId || "-" %></td>
               <td><%= row.supplierName %></td>
               <td><%= row.invoiceNumber %></td>
               <td><%= row.poNumber %></td>

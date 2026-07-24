@@ -14,9 +14,9 @@
     {
       type: "deliveryOrder",
       inputName: "doGrnFile",
-      title: "Delivery Order / GRN",
-      description: "Upload the DO or GRN file when goods are received.",
-      missingLabel: "DO/GRN",
+      title: "Delivery Order",
+      description: "Upload the DO file when goods are received.",
+      missingLabel: "DO",
     },
     {
       type: "invoice",
@@ -26,14 +26,6 @@
       missingLabel: "Supplier Invoice",
     },
   ];
-  const selectedUploadedSections = selectedSet
-    ? uploadSections
-        .map((section) => ({
-          ...section,
-          document: selectedSet.documents?.[section.type],
-        }))
-        .filter((section) => section.document)
-    : [];
   const selectedMissingTypes = selectedSet?.missingDocuments || [];
   const formatDate = (value) => value ? new Date(value).toLocaleString() : "-";
   const showUploadSuccessPopup = successMessage === "Documents uploaded successfully!";
@@ -78,11 +70,11 @@
     </article>
 
     <article class="excel-guide-card">
-      <h3>Delivery Order / GRN</h3>
+      <h3>Delivery Order</h3>
       <ul>
         <li>Supplier Name</li>
         <li>PO Number</li>
-        <li>DO/GRN Number</li>
+        <li>DO Number</li>
         <li>Item Description</li>
         <li>Quantity Received</li>
         <li>Document Date</li>
@@ -118,25 +110,19 @@
       <strong>Adding to PO <%= selectedSet.poNumber %></strong>
       <span>Select one of the missing sections below: <%= selectedSet.missingDocuments.join(", ") || "No missing documents" %></span>
     </div>
-    <% if (selectedUploadedSections.length) { %>
-      <div class="selected-uploaded-files">
-        <% selectedUploadedSections.forEach((section) => { %>
-          <div class="selected-uploaded-file">
-            <div>
-              <span><%= section.title %></span>
-              <strong><%= section.document.file?.originalName || "Saved Excel file" %></strong>
-            </div>
-            <form
-              action="/pending-document-sets/<%= encodeURIComponent(selectedSet.id) %>/documents/<%= encodeURIComponent(section.type) %>/delete"
-              method="POST"
-              onsubmit="return confirm('Delete this uploaded <%= section.title %> file from the pending set?');"
-            >
-              <button class="uploaded-file-delete" type="submit" aria-label="Delete <%= section.title %>">&times;</button>
-            </form>
-          </div>
-        <% }) %>
-      </div>
-    <% } %>
+  <% } %>
+
+  <% if (selectedSet) { %>
+    <% uploadSections.forEach((section) => { %>
+      <% if (selectedSet.documents?.[section.type]) { %>
+        <form
+          id="delete-uploaded-<%= section.type %>"
+          action="/pending-document-sets/<%= encodeURIComponent(selectedSet.id) %>/documents/<%= encodeURIComponent(section.type) %>/delete"
+          method="POST"
+          hidden
+        ></form>
+      <% } %>
+    <% }) %>
   <% } %>
 
   <form id="documentSetForm" action="/upload" method="POST" enctype="multipart/form-data">
@@ -161,17 +147,40 @@
             <p><%= section.description %></p>
             <% if (isAlreadyUploaded) { %>
               <div class="previous-upload-file">
-                <span>Previously uploaded</span>
-                <strong><%= uploadedDocument.file?.originalName || "Saved Excel file" %></strong>
+                <div>
+                  <span>Previously uploaded</span>
+                  <strong><%= uploadedDocument.file?.originalName || "Saved Excel file" %></strong>
+                </div>
+                <button
+                  class="uploaded-file-delete"
+                  type="submit"
+                  form="delete-uploaded-<%= section.type %>"
+                  aria-label="Delete <%= section.title %>"
+                  title="Remove uploaded file"
+                  onclick="return confirm('Delete this uploaded <%= section.title %> file from the pending set?');"
+                >&times;</button>
               </div>
             <% } %>
           </div>
 
-        <label class="upload-box single-file-box">
-            <span><%= isAlreadyUploaded ? "Replace file" : "Select file" %></span>
-            <small><%= isAlreadyUploaded ? "Choose a new Excel file only if you want to replace the previous upload." : "Accepted file types: .xlsx, .xls, and .csv." %></small>
-            <input type="file" name="<%= section.inputName %>" accept=".xlsx,.xls,.csv">
-          </label>
+          <% if (!isAlreadyUploaded) { %>
+            <div class="upload-box single-file-box">
+              <label for="<%= section.inputName %>">
+                <span>Select file</span>
+                <small>Accepted file types: .xlsx, .xls, and .csv.</small>
+              </label>
+              <div class="selected-file-control">
+                <input id="<%= section.inputName %>" type="file" name="<%= section.inputName %>" accept=".xlsx,.xls,.csv">
+                <button
+                  class="selected-file-clear"
+                  type="button"
+                  aria-label="Remove selected <%= section.title %> file"
+                  title="Remove selected file"
+                  hidden
+                >&times;</button>
+              </div>
+            </div>
+          <% } %>
         </section>
       <% }) %>
     </div>
@@ -212,8 +221,8 @@
           <span>Purchase Order</span>
         </label>
         <label>
-          <input type="checkbox" name="missingDocumentFilter" value="DO/GRN">
-          <span>DO/GRN</span>
+          <input type="checkbox" name="missingDocumentFilter" value="DO">
+          <span>DO</span>
         </label>
         <label>
           <input type="checkbox" name="missingDocumentFilter" value="Supplier Invoice">
@@ -329,6 +338,23 @@
   const putOnHoldButton = document.getElementById("putOnHoldButton");
   const uploadToast = document.getElementById("uploadToast");
   let uploadToastTimeout;
+
+  document.querySelectorAll(".selected-file-control").forEach((control) => {
+    const input = control.querySelector("input[type='file']");
+    const clearButton = control.querySelector(".selected-file-clear");
+
+    const updateClearButton = () => {
+      clearButton.hidden = !input.files?.length;
+    };
+
+    input.addEventListener("change", updateClearButton);
+    clearButton.addEventListener("click", () => {
+      input.value = "";
+      updateClearButton();
+      input.focus();
+    });
+    updateClearButton();
+  });
 
   function showUploadToast(message = "Documents uploaded successfully!") {
     if (!uploadToast) {

@@ -2,6 +2,17 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const XLSX = require("xlsx");
+const paypal = require("../services/paypal");
+const {
+  applyPayPalStatusByBatch,
+  getPayoutByInvoice,
+  itemStatusFromBatch,
+  preparePayout,
+  recordFailure,
+  releaseWebhookEvent,
+  recordSubmission,
+  recordWebhookOnce,
+} = require("../models/paypalpayment");
 
 const {
   approvePayment,
@@ -19,13 +30,10 @@ const {
   getRecords,
   getReportRows,
   getStats,
-  markPaymentPaid,
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,
   savePendingDocumentUpload,
-  setPaymentStatus,
-  simulatePayment,
 } = require("../models/supplierpayment");
 
 const router = express.Router();
@@ -39,6 +47,75 @@ function asyncRoute(handler) {
   return (req, res, next) => {
     Promise.resolve(handler(req, res, next)).catch(next);
   };
+}
+
+const PAYPAL_SUCCESS_STATUSES = new Set(["SUCCESS", "SUCCEEDED"]);
+const PAYPAL_TERMINAL_STATUSES = new Set([
+  ...PAYPAL_SUCCESS_STATUSES,
+  "FAILED",
+  "DENIED",
+  "BLOCKED",
+  "RETURNED",
+  "REFUNDED",
+  "CANCELED",
+  "UNCLAIMED",
+]);
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForPayPalPayoutResult(batchId, initialResponse) {
+  let response = initialResponse;
+  let status = String(itemStatusFromBatch(response)).toUpperCase();
+
+  for (let attempt = 0; attempt < 8 && !PAYPAL_TERMINAL_STATUSES.has(status); attempt += 1) {
+    if (attempt > 0) await wait(750);
+    response = await paypal.getPayoutBatch(batchId);
+    status = String(itemStatusFromBatch(response)).toUpperCase();
+  }
+
+  return { response, status };
+}
+
+async function submitPayPalPayout(invoiceId) {
+  let prepared;
+  try {
+    const record = await getRecord(invoiceId);
+    if (!record) throw new Error("Payment record was not found.");
+    if (
+      !record.canApprovePayment ||
+      record.matching?.status !== "Matched" ||
+      record.validation?.status !== "Valid" ||
+      record.unresolvedDiscrepancies?.length
+    ) {
+      throw new Error(
+        "Accept is disabled until matching is Matched, validation is Valid, and all discrepancies are resolved."
+      );
+    }
+    prepared = await preparePayout(invoiceId);
+    const response = await paypal.createPayout({
+      senderBatchId: prepared.senderBatchId,
+      senderItemId: prepared.senderItemId,
+      recipientEmail: prepared.recipientEmail,
+      amount: prepared.amount_due,
+      currency: prepared.currency,
+      invoiceId: prepared.invoiceId,
+    });
+    await recordSubmission(prepared.payoutId, response);
+    const batchId = response.batch_header?.payout_batch_id;
+    if (!batchId) {
+      throw new Error("PayPal accepted the request without returning a payout batch ID.");
+    }
+    return {
+      ...prepared,
+      payoutStatus: String(response.batch_header?.batch_status || "PENDING").toUpperCase(),
+      completed: false,
+    };
+  } catch (error) {
+    if (prepared?.payoutId) await recordFailure(prepared.payoutId, error);
+    throw error;
+  }
 }
 
 async function savePartialDocumentFiles(files, formData) {
@@ -276,13 +353,26 @@ router.get("/extract/:id", asyncRoute(async (req, res) => {
     pageTitle: "Extracted Data Review",
     activePage: "review",
     record,
+    viewOnly: req.query.mode === "view",
+    fromValidation: req.query.from === "validate-data",
+    backUrl: req.query.from === "extracted-data" ? "/extracted-data" : "/validate-data",
     saved: req.query.saved === "true",
+    revalidated: req.query.revalidated === "true",
     supplierCreated: req.query.supplierCreated === "true",
   });
 }));
 
 router.post("/extract/:id/save", asyncRoute(async (req, res) => {
   const result = await saveCorrectedData(req.params.id, req.body);
+  if (req.body.returnContext === "validate-data") {
+    const updatedRecord = await getRecord(result.recordId);
+    if (updatedRecord?.validation?.status === "Invalid") {
+      res.redirect(
+        `/extract/${encodeURIComponent(result.recordId)}?mode=edit&from=validate-data&revalidated=true`
+      );
+      return;
+    }
+  }
   res.redirect(`/matching-results/${encodeURIComponent(result.recordId)}?updated=true`);
 }));
 
@@ -350,20 +440,45 @@ router.get("/payment-approval", asyncRoute(async (req, res) => {
     paymentList: await getPaymentList(),
     statusGroups,
     currentFilter: req.query.filter || "all",
+    searchQuery: req.query.q || "",
     success: req.query.updated === "true",
+    workflowError: req.query.error || "",
   });
 }));
 
 router.post("/payment-approval/:id/approve", asyncRoute(async (req, res) => {
   const record = await findRecordOrRedirect(req, res);
+  if (!record) return;
 
-  if (!record) {
+  if (
+    !record.canApprovePayment ||
+    record.matching?.status !== "Matched" ||
+    record.validation?.status !== "Valid" ||
+    record.unresolvedDiscrepancies?.length
+  ) {
+    res.redirect(
+      `/payment-approval?filter=pending&error=${encodeURIComponent(
+        "Accept is disabled until matching is Matched, validation is Valid, and all discrepancies are resolved."
+      )}`
+    );
     return;
   }
 
   await approvePayment(req.params.id);
-
   res.redirect("/payment-approval?updated=true&filter=approved");
+}));
+
+router.post("/payment-approval/:id/paypal", asyncRoute(async (req, res) => {
+  try {
+    const result = await submitPayPalPayout(req.params.id);
+    res.redirect(
+      `/receipt/${encodeURIComponent(req.params.id)}?submitted=${result.completed ? "true" : "false"}`
+    );
+  } catch (error) {
+    res.redirect(
+      `/payment-approval?filter=all&error=${encodeURIComponent(error.message || "PayPal payout could not be submitted.")}`
+    );
+  }
 }));
 
 router.post("/payment-approval/:id/reject", asyncRoute(async (req, res) => {
@@ -371,40 +486,154 @@ router.post("/payment-approval/:id/reject", asyncRoute(async (req, res) => {
   res.redirect("/payment-approval?updated=true&filter=rejected");
 }));
 
-router.post("/payment-approval/:id/process", asyncRoute(async (req, res) => {
-  const record = await findRecordOrRedirect(req, res);
+router.get("/payment-simulation", (req, res) => {
+  res.redirect(301, "/payment-approval");
+});
 
-  if (!record) {
+// Compatibility endpoint for old bookmarks/forms. It uses the same duplicate-safe
+// server-side submission path and is intentionally not linked from the UI.
+router.post("/payment-simulation/:id/pay", asyncRoute(async (req, res) => {
+  try {
+    const result = await submitPayPalPayout(req.params.id);
+    res.redirect(
+      `/receipt/${encodeURIComponent(req.params.id)}?submitted=${result.completed ? "true" : "false"}`
+    );
+  } catch (error) {
+    res.redirect(`/payment-approval?error=${encodeURIComponent(error.message || "PayPal payout could not be submitted.")}`);
+  }
+}));
+
+router.get("/receipt/:id/status", asyncRoute(async (req, res) => {
+  const invoiceId = String(req.params.id || "").trim();
+  if (!/^[A-Za-z0-9_-]{1,20}$/.test(invoiceId)) {
+    res.status(400).json({
+      ok: false,
+      retryable: false,
+      error: "Invalid invoice ID.",
+    });
     return;
   }
 
-  await setPaymentStatus(req.params.id, paymentStatuses.processing);
+  let [record, payout] = await Promise.all([
+    getRecord(invoiceId),
+    getPayoutByInvoice(invoiceId),
+  ]);
 
-  res.redirect("/payment-approval?updated=true&filter=processing");
-}));
+  if (!record || !payout) {
+    res.status(404).json({
+      ok: false,
+      retryable: false,
+      error: "Payment status was not found.",
+    });
+    return;
+  }
 
-router.post("/payment-approval/:id/paid", asyncRoute(async (req, res) => {
-  await markPaymentPaid(req.params.id, req.body.paymentMethod);
-  res.redirect("/payment-approval?updated=true&filter=paid");
-}));
+  const terminalStatuses = PAYPAL_TERMINAL_STATUSES;
+  let gatewayStatus = String(payout.status || "PENDING").toUpperCase();
+  const paymentAlreadyPaid = record.dbPaymentStatus === "PAID";
+  const alreadyFinal = paymentAlreadyPaid || terminalStatuses.has(gatewayStatus);
 
-router.get("/payment-simulation", asyncRoute(async (req, res) => {
-  res.render("payment-simulation", {
-    pageTitle: "Payment Simulation",
-    activePage: "simulation",
-    records: await getRecords(),
+  if (!alreadyFinal && record.paymentStatus === paymentStatuses.processing) {
+    if (!payout.paypal_batch_id) {
+      res.status(409).json({
+        ok: false,
+        retryable: true,
+        invoiceId,
+        paymentStatus: record.dbPaymentStatus,
+        gatewayStatus,
+        final: false,
+        successful: false,
+      });
+      return;
+    }
+
+    let response;
+    try {
+      response = await paypal.getPayoutBatch(payout.paypal_batch_id);
+    } catch {
+      res.status(503).json({
+        ok: false,
+        retryable: true,
+        invoiceId,
+        paymentStatus: record.dbPaymentStatus,
+        gatewayStatus,
+        final: false,
+        successful: false,
+      });
+      return;
+    }
+
+    const item = response.items?.[0];
+    const itemStatus = item?.transaction_status
+      ? String(item.transaction_status).toUpperCase()
+      : "";
+
+    // Only an individual payout-item status is allowed to drive finalisation.
+    // A batch-level SUCCESS without an item result remains non-final.
+    if (itemStatus) {
+      await applyPayPalStatusByBatch(
+        payout.paypal_batch_id,
+        itemStatus,
+        response,
+        item.payout_item_id || null
+      );
+      [record, payout] = await Promise.all([
+        getRecord(invoiceId),
+        getPayoutByInvoice(invoiceId),
+      ]);
+      gatewayStatus = String(payout?.status || itemStatus).toUpperCase();
+    }
+  }
+
+  const successful =
+    record.dbPaymentStatus === "PAID" &&
+    PAYPAL_SUCCESS_STATUSES.has(gatewayStatus);
+  const final =
+    successful ||
+    (PAYPAL_TERMINAL_STATUSES.has(gatewayStatus) &&
+      !PAYPAL_SUCCESS_STATUSES.has(gatewayStatus));
+
+  res.json({
+    ok: true,
+    invoiceId,
+    paymentStatus: record.dbPaymentStatus,
+    gatewayStatus,
+    final,
+    successful,
   });
 }));
 
-router.post("/payment-simulation/:id/pay", asyncRoute(async (req, res) => {
-  const record = await simulatePayment(req.params.id, req.body.paymentMethod);
+router.post("/receipt/:id/refresh", asyncRoute(async (req, res) => {
+  const payout = await getPayoutByInvoice(req.params.id);
+  if (!payout?.paypal_batch_id) throw new Error("No submitted PayPal payout was found for this invoice.");
+  const response = await paypal.getPayoutBatch(payout.paypal_batch_id);
+  const item = response.items?.[0];
+  await applyPayPalStatusByBatch(payout.paypal_batch_id, itemStatusFromBatch(response), response, item?.payout_item_id || null);
+  res.redirect(`/receipt/${encodeURIComponent(req.params.id)}?refreshed=true`);
+}));
 
-  if (!record || !record.payment) {
-    res.redirect("/payment-simulation");
+router.post("/webhooks/paypal", asyncRoute(async (req, res) => {
+  const verification = await paypal.verifyWebhook(req.headers, req.body);
+  if (verification.verification_status !== "SUCCESS") {
+    res.status(400).json({ error: "Invalid PayPal webhook signature." });
     return;
   }
-
-  res.redirect(`/receipt/${record.id}`);
+  if (!(await recordWebhookOnce(req.body))) {
+    res.sendStatus(200);
+    return;
+  }
+  const resource = req.body.resource || {};
+  const batchId = resource.payout_batch_id || resource.batch_header?.payout_batch_id;
+  const status = resource.transaction_status || resource.batch_status;
+  try {
+    if (batchId && status) {
+      await applyPayPalStatusByBatch(batchId, status, req.body, resource.payout_item_id || null);
+    }
+  } catch (error) {
+    await releaseWebhookEvent(req.body.id);
+    throw error;
+  }
+  res.sendStatus(200);
 }));
 
 router.get("/receipt/:id", asyncRoute(async (req, res) => {
@@ -416,8 +645,11 @@ router.get("/receipt/:id", asyncRoute(async (req, res) => {
 
   res.render("receipt", {
     pageTitle: "Receipt",
-    activePage: "simulation",
+    activePage: "approval",
     record,
+    paypalPayout: await getPayoutByInvoice(req.params.id),
+    payoutSubmitted: req.query.submitted === "true",
+    payoutRefreshed: req.query.refreshed === "true",
   });
 }));
 

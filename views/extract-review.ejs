@@ -1,5 +1,17 @@
 <%- include("partials/header") %>
 
+<%
+  const isViewOnly = Boolean(locals.viewOnly);
+  const isFromValidation = Boolean(locals.fromValidation);
+  const readOnlyAttributes = isViewOnly ? 'readonly aria-readonly="true"' : '';
+  const validationFieldErrors = record.validation?.fieldErrors || {};
+  const hasInvalidFields = !isViewOnly && Object.values(validationFieldErrors)
+    .some((errors) => Array.isArray(errors) && errors.length > 0);
+  locals.isViewOnly = isViewOnly;
+  locals.readOnlyAttributes = readOnlyAttributes;
+  locals.validationFieldErrors = validationFieldErrors;
+%>
+
 <% if (saved) { %>
   <div class="notice success-notice">Changes saved and matching result updated.</div>
 <% } %>
@@ -8,15 +20,26 @@
   <div class="notice success-notice">New supplier automatically added to supplier master.</div>
 <% } %>
 
-<section class="panel">
-  <div class="section-heading">
+<section class="panel <%= isViewOnly ? 'extract-view-only' : '' %>">
+  <div class="section-heading review-section-heading">
+    <a
+      class="review-back-button"
+      href="<%= locals.backUrl || '/validate-data' %>"
+      aria-label="Go back"
+      title="Go back"
+    >&larr;</a>
     <div>
       <h2>Review Extracted Excel Data - Record #<%= record.id %></h2>
-      <p>Edit extracted values here, then save to update validation, matching results, discrepancies, and payment status.</p>
+      <p><%= isViewOnly
+        ? "View the extracted values below."
+        : "Edit extracted values here, then save to update validation, matching results, discrepancies, and payment status." %></p>
     </div>
   </div>
 
   <form action="/extract/<%= record.id %>/save" method="POST">
+    <% if (isFromValidation) { %>
+      <input type="hidden" name="returnContext" value="validate-data">
+    <% } %>
     <div class="review-grid">
       <article class="review-card">
         <div class="card-heading">
@@ -24,27 +47,27 @@
           <span class="status neutral"><%= record.purchaseOrderFile?.originalName || "Missing File" %></span>
         </div>
 
-        <label>Supplier Name <input name="poSupplierName" value="<%= record.purchaseOrder?.supplierName || '' %>"></label>
-        <label>PO Reference Number <input name="poNumber" value="<%= record.purchaseOrder?.poNumber || '' %>"></label>
-        <label>Document Date <input type="date" name="poDocumentDate" value="<%= record.purchaseOrder?.documentDate || '' %>"></label>
-        <label>Item Description <input name="poItemDescription" value="<%= record.purchaseOrder?.itemDescription || '' %>"></label>
-        <label>Quantity Ordered <input type="number" step="0.01" name="poQuantityOrdered" value="<%= record.purchaseOrder?.quantityOrdered || '' %>"></label>
-        <label>Unit Price <input type="number" step="0.01" name="poUnitPrice" value="<%= record.purchaseOrder?.unitPrice || '' %>"></label>
-        <label>Total Amount <input type="number" step="0.01" name="poTotalAmount" value="<%= record.purchaseOrder?.totalAmount || '' %>"></label>
+        <%- include("partials/review-field", { fieldKey: "po.supplierName", fieldLabel: "Supplier Name", inputName: "poSupplierName", fieldValue: record.purchaseOrder?.supplierName }) %>
+        <%- include("partials/review-field", { fieldKey: "po.poNumber", fieldLabel: "PO Reference Number", inputName: "poNumber", fieldValue: record.purchaseOrder?.poNumber }) %>
+        <%- include("partials/review-field", { fieldKey: "po.documentDate", fieldLabel: "Document Date", inputName: "poDocumentDate", fieldValue: record.purchaseOrder?.documentDate, inputType: "date" }) %>
+        <%- include("partials/review-field", { fieldKey: "po.itemDescription", fieldLabel: "Item Description", inputName: "poItemDescription", fieldValue: record.purchaseOrder?.itemDescription }) %>
+        <%- include("partials/review-field", { fieldKey: "po.quantityOrdered", fieldLabel: "Quantity Ordered", inputName: "poQuantityOrdered", fieldValue: record.purchaseOrder?.quantityOrdered, inputType: "number", step: "0.01" }) %>
+        <%- include("partials/review-field", { fieldKey: "po.unitPrice", fieldLabel: "Unit Price", inputName: "poUnitPrice", fieldValue: record.purchaseOrder?.unitPrice, inputType: "number", step: "0.01" }) %>
+        <%- include("partials/review-field", { fieldKey: "po.totalAmount", fieldLabel: "Total Amount", inputName: "poTotalAmount", fieldValue: record.purchaseOrder?.totalAmount, inputType: "number", step: "0.01" }) %>
       </article>
 
       <article class="review-card">
         <div class="card-heading">
-          <h3>DO / GRN</h3>
+          <h3>DO</h3>
           <span class="status neutral"><%= record.deliveryOrderFile?.originalName || "Missing File" %></span>
         </div>
 
-        <label>Supplier Name <input name="doSupplierName" value="<%= record.deliveryOrder?.supplierName || '' %>"></label>
-        <label>PO Reference Number <input name="doPoNumber" value="<%= record.deliveryOrder?.poNumber || '' %>"></label>
-        <label>DO/GRN Number <input name="doGrnNumber" value="<%= record.deliveryOrder?.doGrnNumber || '' %>"></label>
-        <label>Document Date <input type="date" name="doDocumentDate" value="<%= record.deliveryOrder?.documentDate || '' %>"></label>
-        <label>Item Description <input name="doItemDescription" value="<%= record.deliveryOrder?.itemDescription || '' %>"></label>
-        <label>Quantity Received <input type="number" step="0.01" name="doQuantityReceived" value="<%= record.deliveryOrder?.quantityReceived || '' %>"></label>
+        <%- include("partials/review-field", { fieldKey: "do.supplierName", fieldLabel: "Supplier Name", inputName: "doSupplierName", fieldValue: record.deliveryOrder?.supplierName }) %>
+        <%- include("partials/review-field", { fieldKey: "do.poNumber", fieldLabel: "PO Reference Number", inputName: "doPoNumber", fieldValue: record.deliveryOrder?.poNumber }) %>
+        <%- include("partials/review-field", { fieldKey: "do.doGrnNumber", fieldLabel: "DO Number", inputName: "doGrnNumber", fieldValue: record.deliveryOrder?.doGrnNumber }) %>
+        <%- include("partials/review-field", { fieldKey: "do.documentDate", fieldLabel: "Document Date", inputName: "doDocumentDate", fieldValue: record.deliveryOrder?.documentDate, inputType: "date" }) %>
+        <%- include("partials/review-field", { fieldKey: "do.itemDescription", fieldLabel: "Item Description", inputName: "doItemDescription", fieldValue: record.deliveryOrder?.itemDescription }) %>
+        <%- include("partials/review-field", { fieldKey: "do.quantityReceived", fieldLabel: "Quantity Received", inputName: "doQuantityReceived", fieldValue: record.deliveryOrder?.quantityReceived, inputType: "number", step: "0.01" }) %>
       </article>
 
       <article class="review-card">
@@ -53,23 +76,42 @@
           <span class="status neutral"><%= record.invoiceFile?.originalName || "Missing File" %></span>
         </div>
 
-        <label>Supplier Name <input name="invoiceSupplierName" value="<%= record.invoice?.supplierName || '' %>"></label>
-        <label>Invoice Number <input name="invoiceNumber" value="<%= record.invoice?.invoiceNumber || '' %>"></label>
-        <label>PO Reference Number <input name="invoicePoNumber" value="<%= record.invoice?.poNumber || '' %>"></label>
-        <label>Document Date <input type="date" name="invoiceDocumentDate" value="<%= record.invoice?.documentDate || '' %>"></label>
-        <label>Item Description <input name="invoiceItemDescription" value="<%= record.invoice?.itemDescription || '' %>"></label>
-        <label>Quantity Billed <input type="number" step="0.01" name="invoiceQuantityBilled" value="<%= record.invoice?.quantityBilled || '' %>"></label>
-        <label>Unit Price <input type="number" step="0.01" name="invoiceUnitPrice" value="<%= record.invoice?.unitPrice || '' %>"></label>
-        <label>Total Amount <input type="number" step="0.01" name="invoiceTotalAmount" value="<%= record.invoice?.totalAmount || '' %>"></label>
+        <%- include("partials/review-field", { fieldKey: "invoice.supplierName", fieldLabel: "Supplier Name", inputName: "invoiceSupplierName", fieldValue: record.invoice?.supplierName }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.invoiceNumber", fieldLabel: "Invoice Number", inputName: "invoiceNumber", fieldValue: record.invoice?.invoiceNumber }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.poNumber", fieldLabel: "PO Reference Number", inputName: "invoicePoNumber", fieldValue: record.invoice?.poNumber }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.documentDate", fieldLabel: "Document Date", inputName: "invoiceDocumentDate", fieldValue: record.invoice?.documentDate, inputType: "date" }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.itemDescription", fieldLabel: "Item Description", inputName: "invoiceItemDescription", fieldValue: record.invoice?.itemDescription }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.quantityBilled", fieldLabel: "Quantity Billed", inputName: "invoiceQuantityBilled", fieldValue: record.invoice?.quantityBilled, inputType: "number", step: "0.01" }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.unitPrice", fieldLabel: "Unit Price", inputName: "invoiceUnitPrice", fieldValue: record.invoice?.unitPrice, inputType: "number", step: "0.01" }) %>
+        <%- include("partials/review-field", { fieldKey: "invoice.totalAmount", fieldLabel: "Total Amount", inputName: "invoiceTotalAmount", fieldValue: record.invoice?.totalAmount, inputType: "number", step: "0.01" }) %>
       </article>
     </div>
 
-    <div class="form-actions">
-      <div class="button-row form-button-row">
-        <button type="submit">Save / Update Changes</button>
+    <% if (!isViewOnly) { %>
+      <div class="form-actions">
+        <div class="button-row form-button-row">
+          <button type="submit">Save / Update Changes</button>
+        </div>
       </div>
-    </div>
+    <% } %>
   </form>
 </section>
+
+<% if (hasInvalidFields) { %>
+  <script>
+    (() => {
+      const firstInvalidInput = document.querySelector(".review-field--invalid input");
+      if (!firstInvalidInput) return;
+
+      window.requestAnimationFrame(() => {
+        firstInvalidInput.focus({ preventScroll: true });
+        firstInvalidInput.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          block: "center",
+        });
+      });
+    })();
+  </script>
+<% } %>
 
 <%- include("partials/footer") %>

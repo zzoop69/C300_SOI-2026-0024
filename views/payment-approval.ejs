@@ -1,95 +1,211 @@
 <%- include("partials/header") %>
 
 <%
-  const viewRecords = locals.records || [];
-  const viewPaymentList = locals.paymentList || [];
-  const viewStatusGroups = locals.statusGroups || {};
-  const viewCurrentFilter = locals.currentFilter || "all";
+  const viewRecords = [...(locals.records || [])].sort((left, right) =>
+    new Date(right.createdAt || 0) - new Date(left.createdAt || 0)
+  );
+  const requestedFilter = locals.currentFilter || "all";
+  const normalisedFilter = requestedFilter === "paid" ? "completed" : requestedFilter;
+  const viewCurrentFilter = ["all", "pending", "approved", "rejected", "completed"].includes(normalisedFilter)
+    ? normalisedFilter
+    : "all";
+  const viewSearchQuery = String(locals.searchQuery || "").trim();
+  const normalisedSearchQuery = viewSearchQuery.toLowerCase();
   const viewSuccess = Boolean(locals.success);
-  const actionNeededRecords = viewStatusGroups.pending || viewStatusGroups.actionNeeded || [];
-  const statusClass = (value) => String(value || "neutral").toLowerCase().replaceAll(" ", "-").replaceAll("/", "-");
+  const viewWorkflowError = String(locals.workflowError || "");
+  const statusClass = (value) => String(value || "neutral")
+    .toLowerCase()
+    .replaceAll(" ", "-")
+    .replaceAll("/", "-");
+  const isPending = (record) => ["Pending Approval", "Payment Held"].includes(record.paymentStatus);
+  const isApproved = (record) => record.paymentStatus === "Approved for Payment";
+  const isProcessing = (record) => record.paymentStatus === "Payment Processing";
+  const isRejected = (record) => record.paymentStatus === "Rejected";
+  const isCompleted = (record) => record.paymentStatus === "Paid";
+  const searchableRecords = viewRecords.filter((record) => {
+    if (!normalisedSearchQuery) return true;
+    const searchableText = [
+      record.invoice?.supplierName,
+      record.purchaseOrder?.supplierName,
+      record.invoice?.invoiceNumber,
+      record.purchaseOrder?.poNumber,
+    ].filter(Boolean).join(" ").toLowerCase();
+    return searchableText.includes(normalisedSearchQuery);
+  });
   const filters = [
-    { key: "all", label: "All" },
-    { key: "pending", label: "Pending" },
-    { key: "approved", label: "Approved" },
-    { key: "processing", label: "Processing" },
-    { key: "rejected", label: "Rejected" },
-    { key: "paid", label: "Paid" },
+    { key: "all", label: "All", count: searchableRecords.length },
+    { key: "pending", label: "Pending", count: searchableRecords.filter(isPending).length },
+    { key: "approved", label: "Approved", count: searchableRecords.filter(isApproved).length },
+    { key: "rejected", label: "Rejected", count: searchableRecords.filter(isRejected).length },
+    { key: "completed", label: "Completed", count: searchableRecords.filter(isCompleted).length },
   ];
-  const sections = [
-    {
-      title: "Pending / Action Needed",
-      description: "Invoices still awaiting approval or review.",
-      records: actionNeededRecords,
-      filters: ["all", "pending"],
-    },
-    {
-      title: "Approved",
-      description: "Invoices approved for payment but not yet paid.",
-      records: viewStatusGroups.approved || [],
-      filters: ["all", "approved"],
-    },
-    {
-      title: "Processing",
-      description: "Invoices currently being processed for payment.",
-      records: viewStatusGroups.processing || [],
-      filters: ["all", "processing"],
-    },
-    {
-      title: "Rejected",
-      description: "Invoices rejected by staff.",
-      records: viewStatusGroups.rejected || [],
-      filters: ["all", "rejected"],
-    },
-    {
-      title: "Paid",
-      description: "Invoices marked as paid with demo transaction details.",
-      records: viewStatusGroups.paid || [],
-      filters: ["all", "paid"],
-    },
-  ].filter((section) => section.filters.includes(viewCurrentFilter));
+  const filteredRecords = searchableRecords.filter((record) => {
+    if (viewCurrentFilter === "pending") return isPending(record);
+    if (viewCurrentFilter === "approved") return isApproved(record);
+    if (viewCurrentFilter === "rejected") return isRejected(record);
+    if (viewCurrentFilter === "completed") return isCompleted(record);
+    return true;
+  });
 %>
 
-<section class="panel">
-  <div class="section-heading">
+<section class="panel payment-workflow-panel">
+  <div class="section-heading workflow-heading">
     <div>
-      <h2>Supplier Payment List</h2>
-      <p>Action-needed invoices exclude Paid and Rejected records.</p>
+      <p class="eyebrow">Latest first</p>
+      <h2>Payment Approval Workflow</h2>
+      <p>Review document checks, approve eligible invoices, and track each payment through completion.</p>
     </div>
   </div>
 
   <% if (viewSuccess) { %>
     <div class="notice success-notice">Payment status updated successfully.</div>
   <% } %>
+  <% if (viewWorkflowError) { %>
+    <div class="notice error-notice"><%= viewWorkflowError %></div>
+  <% } %>
 
-  <% if (viewPaymentList.length === 0) { %>
-    <div class="empty-state">No records found.</div>
+  <form class="workflow-search" action="/payment-approval" method="GET" role="search">
+    <input type="hidden" name="filter" value="<%= viewCurrentFilter %>">
+    <label for="paymentWorkflowSearch">Search payments</label>
+    <div class="workflow-search-controls">
+      <input
+        id="paymentWorkflowSearch"
+        name="q"
+        type="search"
+        value="<%= viewSearchQuery %>"
+        placeholder="Search supplier, invoice, or PO number"
+        autocomplete="off"
+      >
+      <% if (viewSearchQuery) { %>
+        <a class="button secondary-button" href="/payment-approval?filter=<%= viewCurrentFilter %>">Clear</a>
+      <% } %>
+    </div>
+  </form>
+
+  <nav class="workflow-tabs" aria-label="Payment workflow stages">
+    <% filters.forEach((filter) => { %>
+      <a
+        class="<%= viewCurrentFilter === filter.key ? 'active' : '' %>"
+        href="/payment-approval?filter=<%= filter.key %><%= viewSearchQuery ? `&q=${encodeURIComponent(viewSearchQuery)}` : '' %>"
+        <%= viewCurrentFilter === filter.key ? 'aria-current="page"' : '' %>
+      >
+        <span><%= filter.label %></span>
+        <strong><%= filter.count %></strong>
+      </a>
+    <% }) %>
+  </nav>
+
+  <div class="workflow-list-heading">
+    <div>
+      <h3><%= filters.find((filter) => filter.key === viewCurrentFilter)?.label || "All" %> payments</h3>
+      <p id="workflowResultSummary">
+        <span id="workflowResultCount"><%= filteredRecords.length %></span> record<span id="workflowResultPlural"><%= filteredRecords.length === 1 ? "" : "s" %></span>, ordered from latest invoice date.
+        <% if (viewSearchQuery) { %> Results for “<%= viewSearchQuery %>”.<% } %>
+      </p>
+    </div>
+  </div>
+
+  <% if (filteredRecords.length === 0) { %>
+    <div class="empty-state"><%= viewSearchQuery ? "No payments match this search in the selected stage." : "No payments in this stage." %></div>
   <% } else { %>
-    <div class="table-wrap">
-      <table>
+    <div id="workflowSearchEmpty" class="empty-state" hidden>No payments match this search in the selected stage.</div>
+    <div class="table-wrap workflow-table-wrap">
+      <table class="workflow-table">
         <thead>
           <tr>
-            <th>Supplier</th>
-            <th>Invoice</th>
-            <th>PO Number</th>
-            <th>Amount Payable</th>
-            <th>Match Status</th>
-            <th>Validation Status</th>
-            <th>Approval Status</th>
-            <th>Payment Status</th>
+            <th>Supplier / Invoice</th>
+            <th>Amount</th>
+            <th>Document Checks</th>
+            <th>Payment Stage</th>
+            <th>Invoice Date</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <% viewPaymentList.forEach((record) => { %>
-            <tr>
-              <td><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Missing" %></td>
-              <td><%= record.invoice?.invoiceNumber || "Missing" %></td>
-              <td><%= record.purchaseOrder?.poNumber || "Missing" %></td>
-              <td>$<%= Number(record.amountPayable || 0).toFixed(2) %></td>
-              <td><span class="status <%= statusClass(record.matching.status) %>"><%= record.matching.status %></span></td>
-              <td><span class="status <%= statusClass(record.validation.status) %>"><%= record.validation.status %></span></td>
-              <td><%= record.approvalStatus %></td>
-              <td><span class="status <%= statusClass(record.paymentStatus) %>"><%= record.paymentStatus %></span></td>
+          <% filteredRecords.forEach((record) => { %>
+            <%
+              const displayedSupplier = isCompleted(record) && record.payment?.supplierName
+                ? record.payment.supplierName
+                : (record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs review");
+              const displayedAmount = isCompleted(record) && record.payment?.amountPaid
+                ? record.payment.amountPaid
+                : record.amountPayable;
+              const displayedCurrency = isCompleted(record) && record.payment?.currency
+                ? record.payment.currency
+                : (record.paymentCurrency || "SGD");
+            %>
+            <tr
+              data-workflow-row
+              data-search="<%= [
+                displayedSupplier,
+                record.purchaseOrder?.supplierName,
+                record.invoice?.invoiceNumber,
+                record.purchaseOrder?.poNumber,
+              ].filter(Boolean).join(' ').toLowerCase() %>"
+            >
+              <td data-label="Supplier / Invoice">
+                <strong><%= displayedSupplier %></strong>
+                <span><%= record.invoice?.invoiceNumber || "Missing invoice" %> · <%= record.purchaseOrder?.poNumber || "Missing PO" %></span>
+              </td>
+              <td data-label="Amount">
+                <strong><%= displayedCurrency %> <%= Number(displayedAmount || 0).toFixed(2) %></strong>
+              </td>
+              <td data-label="Document Checks">
+                <div class="workflow-checks">
+                  <span class="status <%= statusClass(record.matching.status) %>"><%= record.matching.status %></span>
+                  <span class="status <%= statusClass(record.validation.status) %>"><%= record.validation.status %></span>
+                  <% if (record.unresolvedDiscrepancies.length > 0) { %>
+                    <span class="workflow-issue-count"><%= record.unresolvedDiscrepancies.length %> issue<%= record.unresolvedDiscrepancies.length === 1 ? "" : "s" %></span>
+                  <% } %>
+                </div>
+              </td>
+              <td data-label="Payment Stage">
+                <span class="status <%= statusClass(record.paymentStatus) %>"><%= record.paymentStatus %></span>
+              </td>
+              <td data-label="Invoice Date">
+                <span class="workflow-date"><%= record.createdAt ? new Date(`${record.createdAt}T00:00:00`).toLocaleDateString("en-SG") : "-" %></span>
+              </td>
+              <td data-label="Action">
+                <% if (isPending(record)) { %>
+                  <div class="workflow-actions">
+                    <form action="/payment-approval/<%= record.id %>/approve" method="POST">
+                      <button type="submit" <%= record.canApprovePayment ? "" : "disabled" %>>Accept</button>
+                    </form>
+                    <form action="/payment-approval/<%= record.id %>/reject" method="POST">
+                      <button class="danger-button" type="submit">Reject</button>
+                    </form>
+                  </div>
+                  <% if (!record.canApprovePayment) { %>
+                    <small class="workflow-block-reason">Resolve matching, validation, and discrepancy issues first.</small>
+                  <% } %>
+                <% } else if (isApproved(record)) { %>
+                  <div class="workflow-actions">
+                    <form
+                      class="paypal-submit-form"
+                      action="/payment-approval/<%= record.id %>/paypal"
+                      method="POST"
+                      data-paypal-submit-form
+                    >
+                      <button type="submit" <%= record.canApprovePayment ? "" : "disabled" %>>
+                        <span class="paypal-submit-spinner" data-paypal-spinner hidden aria-hidden="true"></span>
+                        <span data-paypal-button-text>Pay with PayPal Sandbox</span>
+                      </button>
+                      <small class="paypal-submit-message" data-paypal-submit-message hidden>
+                        Submitting your payment to PayPal Sandbox. Please wait.
+                      </small>
+                    </form>
+                  </div>
+                  <% if (!record.canApprovePayment) { %>
+                    <small class="workflow-block-reason">Payment is blocked because its document eligibility changed.</small>
+                  <% } %>
+                <% } else if (isProcessing(record)) { %>
+                  <span class="workflow-no-action">In progress</span>
+                <% } else if (isCompleted(record)) { %>
+                  <span class="workflow-no-action">Completed</span>
+                <% } else { %>
+                  <span class="workflow-no-action">No action</span>
+                <% } %>
+              </td>
             </tr>
           <% }) %>
         </tbody>
@@ -98,81 +214,59 @@
   <% } %>
 </section>
 
-<section class="panel">
-  <div class="section-heading">
-    <div>
-      <h2>Payment Approval Workflow</h2>
-      <p>This is a demo approval and payment flow only. It does not connect to a real payment gateway.</p>
-    </div>
-  </div>
+<script>
+  (() => {
+    const searchForm = document.querySelector(".workflow-search");
+    const searchInput = document.getElementById("paymentWorkflowSearch");
+    const rows = [...document.querySelectorAll("[data-workflow-row]")];
+    const emptyState = document.getElementById("workflowSearchEmpty");
+    const resultCount = document.getElementById("workflowResultCount");
+    const resultPlural = document.getElementById("workflowResultPlural");
 
-  <nav class="filter-bar" aria-label="Payment approval filters">
-    <% filters.forEach((filter) => { %>
-      <a class="<%= viewCurrentFilter === filter.key ? 'active' : '' %>" href="/payment-approval?filter=<%= filter.key %>"><%= filter.label %></a>
-    <% }) %>
-  </nav>
+    if (!searchForm || !searchInput) return;
 
-  <% if (viewRecords.length === 0) { %>
-    <div class="empty-state">No records found.</div>
-  <% } %>
+    const applySearch = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      let visibleCount = 0;
 
-  <% sections.forEach((section) => { %>
-    <div class="approval-section">
-      <div class="section-heading compact-heading">
-        <div>
-          <h3><%= section.title %></h3>
-          <p><%= section.description %></p>
-        </div>
-      </div>
+      rows.forEach((row) => {
+        const matches = !query || row.dataset.search.includes(query);
+        row.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
 
-      <% if (section.records.length === 0) { %>
-        <div class="empty-state">No records found.</div>
-      <% } else { %>
-        <div class="approval-grid">
-          <% section.records.forEach((record) => { %>
-            <article class="approval-card">
-              <div class="card-heading">
-                <h3><%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs review" %></h3>
-                <span class="status <%= statusClass(record.paymentStatus) %>"><%= record.paymentStatus %></span>
-              </div>
+      if (emptyState) emptyState.hidden = visibleCount !== 0;
+      if (resultCount) resultCount.textContent = visibleCount;
+      if (resultPlural) resultPlural.textContent = visibleCount === 1 ? "" : "s";
+    };
 
-              <dl class="details-list">
-                <div><dt>Invoice Number</dt><dd><%= record.invoice?.invoiceNumber || "Missing" %></dd></div>
-                <div><dt>PO Number</dt><dd><%= record.purchaseOrder?.poNumber || "Missing" %></dd></div>
-                <div><dt>DO/GRN Number</dt><dd><%= record.deliveryOrder?.doGrnNumber || "Missing" %></dd></div>
-                <div><dt>Amount Payable</dt><dd>$<%= Number(record.amountPayable || 0).toFixed(2) %></dd></div>
-                <div><dt>Match Status</dt><dd><span class="status <%= statusClass(record.matching.status) %>"><%= record.matching.status %></span></dd></div>
-                <div><dt>Validation Status</dt><dd><span class="status <%= statusClass(record.validation.status) %>"><%= record.validation.status %></span></dd></div>
-                <div><dt>Discrepancies</dt><dd><%= record.unresolvedDiscrepancies.length %></dd></div>
-              </dl>
+    searchForm.addEventListener("submit", (event) => event.preventDefault());
+    searchInput.addEventListener("input", applySearch);
+  })();
+</script>
 
-              <% if (!record.canApprovePayment && record.paymentStatus !== "Paid" && record.paymentStatus !== "Rejected") { %>
-                <div class="notice">Approve is disabled because Match Status must be Matched, Validation Status must be Valid, and Discrepancies must be 0.</div>
-              <% } %>
+<script>
+  (() => {
+    document.querySelectorAll("[data-paypal-submit-form]").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (form.dataset.submitting === "true") {
+          event.preventDefault();
+          return;
+        }
 
-              <% if (record.paymentStatus !== "Paid" && record.paymentStatus !== "Rejected") { %>
-                <div class="approval-actions">
-                  <form action="/payment-approval/<%= record.id %>/approve" method="POST">
-                    <button type="submit" <%= record.canApprovePayment ? "" : "disabled" %>>Approve</button>
-                  </form>
-                  <form action="/payment-approval/<%= record.id %>/process" method="POST">
-                    <button class="secondary-button" type="submit" <%= record.paymentStatus === "Approved for Payment" ? "" : "disabled" %>>Processing</button>
-                  </form>
-                  <form action="/payment-approval/<%= record.id %>/paid" method="POST">
-                    <input type="hidden" name="paymentMethod" value="Demo Bank Transfer">
-                    <button class="secondary-button" type="submit" <%= record.paymentStatus === "Approved for Payment" || record.paymentStatus === "Payment Processing" ? "" : "disabled" %>>Mark Paid</button>
-                  </form>
-                  <form action="/payment-approval/<%= record.id %>/reject" method="POST">
-                    <button class="danger-button" type="submit">Reject</button>
-                  </form>
-                </div>
-              <% } %>
-            </article>
-          <% }) %>
-        </div>
-      <% } %>
-    </div>
-  <% }) %>
-</section>
+        form.dataset.submitting = "true";
+        const button = form.querySelector("button[type='submit']");
+        const spinner = form.querySelector("[data-paypal-spinner]");
+        const buttonText = form.querySelector("[data-paypal-button-text]");
+        const message = form.querySelector("[data-paypal-submit-message]");
+
+        if (button) button.disabled = true;
+        if (spinner) spinner.hidden = false;
+        if (buttonText) buttonText.textContent = "Submitting payment\u2026";
+        if (message) message.hidden = false;
+      });
+    });
+  })();
+</script>
 
 <%- include("partials/footer") %>

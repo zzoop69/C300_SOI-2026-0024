@@ -441,14 +441,30 @@ async function queryRecords(whereClause = "", values = []) {
         pdl.payment_due_id,
         pdl.due_date,
         pdl.amount_due,
+        pdl.currency AS payment_currency,
         pdl.payment_status,
-        pdl.exception_flag
+        pdl.exception_flag,
+        pp.id AS paypal_payout_id,
+        pp.supplier_id AS payment_supplier_id,
+        pp.supplier_name AS payment_supplier_name,
+        pp.paypal_batch_id,
+        pp.paypal_item_id,
+        pp.recipient_email AS paypal_recipient_email,
+        pp.amount AS paypal_amount,
+        pp.currency AS paypal_currency,
+        pp.status AS paypal_status,
+        pp.updated_at AS paypal_updated_at
       FROM supplier_invoices si
       INNER JOIN supplier_master sm ON sm.supplier_id = si.supplier_id
       INNER JOIN payment_terms pt ON pt.term_code = sm.payment_term_code
       INNER JOIN purchase_orders po ON po.po_id = si.po_id
       LEFT JOIN delivery_orders dox ON dox.do_id = si.do_id
       LEFT JOIN payment_due_list pdl ON pdl.invoice_id = si.invoice_id
+      LEFT JOIN paypal_payouts pp ON pp.id = (
+        SELECT MAX(pp_latest.id)
+        FROM paypal_payouts pp_latest
+        WHERE pp_latest.payment_due_id = pdl.payment_due_id
+      )
       ${whereClause}
       ORDER BY si.invoice_date DESC, si.invoice_id DESC
     `,
@@ -520,39 +536,50 @@ function rowToRecord(row, exceptions) {
     },
     dbPaymentStatus: row.payment_status || dbPaymentStatuses.held,
     dbExceptionFlag: row.exception_flag || (exceptions.length ? "Y" : "N"),
+    paymentCurrency: row.payment_currency || row.invoice_currency || row.po_currency || "SGD",
     extractionStatus: row.do_id ? "Extracted" : "Needs Review",
     paymentStatus,
     approvalStatus: approvalStatusLabel(paymentStatus),
-    payment: paymentStatus === paymentStatuses.paid
+    payment: row.paypal_payout_id || paymentStatus === paymentStatuses.paid
       ? {
-          transactionId: `PAY-${row.payment_due_id || row.invoice_id}`,
-          method: "Demo Bank Transfer",
-          amountPaid: row.amount_due || row.invoice_total_amount,
-          paidAt: row.due_date,
-          status: paymentStatuses.paid,
+          supplierId: row.payment_supplier_id || row.supplier_id,
+          supplierName: row.payment_supplier_name || row.supplier_name,
+          transactionId: row.paypal_item_id || row.paypal_batch_id || "",
+          batchId: row.paypal_batch_id || "",
+          recipientEmail: row.paypal_recipient_email || "",
+          method: row.paypal_payout_id ? "PayPal Sandbox" : "Legacy Demo Payment",
+          amountPaid: row.paypal_amount || row.amount_due || row.invoice_total_amount,
+          currency: row.paypal_currency || row.payment_currency || row.invoice_currency,
+          paidAt: row.paypal_updated_at || row.due_date,
+          status: row.paypal_status || paymentStatus,
         }
       : null,
     databaseExceptions: exceptions,
   };
 }
 
-function pushIssue(issues, invalidFields, field, message) {
+function pushIssue(issues, invalidFields, fieldErrors, field, message) {
   issues.push(message);
   invalidFields.push(field);
+  fieldErrors[field] ||= [];
+  if (!fieldErrors[field].includes(message)) {
+    fieldErrors[field].push(message);
+  }
 }
 
-function validateTotal(issues, invalidFields, field, quantity, unitPrice, total, label) {
+function validateTotal(issues, invalidFields, fieldErrors, field, quantity, unitPrice, total, label) {
   const expected = Number((money(quantity) * money(unitPrice)).toFixed(2));
   const actual = money(total);
 
   if (!(actual > 0) || Math.abs(actual - expected) > 0.01) {
-    pushIssue(issues, invalidFields, field, `${label} total amount must equal quantity x unit price.`);
+    pushIssue(issues, invalidFields, fieldErrors, field, `${label} total amount must equal quantity x unit price.`);
   }
 }
 
 function calculateValidation(record) {
   const invalidFields = [];
   const messages = [];
+  const fieldErrors = {};
   const po = record.purchaseOrder || emptyPurchaseOrder();
   const deliveryOrder = record.deliveryOrder || emptyDeliveryOrder();
   const invoice = record.invoice || emptyInvoice();
@@ -574,7 +601,7 @@ function calculateValidation(record) {
     ["invoice.documentDate", invoice.documentDate, "Invoice document date is required."],
   ].forEach(([field, value, message]) => {
     if (String(value || "").trim() === "") {
-      pushIssue(messages, invalidFields, field, message);
+      pushIssue(messages, invalidFields, fieldErrors, field, message);
     }
   });
 
@@ -586,12 +613,12 @@ function calculateValidation(record) {
     ["invoice.unitPrice", invoice.unitPrice, "Invoice unit price must be positive."],
   ].forEach(([field, value, message]) => {
     if (!(toNumber(value) > 0)) {
-      pushIssue(messages, invalidFields, field, message);
+      pushIssue(messages, invalidFields, fieldErrors, field, message);
     }
   });
 
-  validateTotal(messages, invalidFields, "po.totalAmount", po.quantityOrdered, po.unitPrice, po.totalAmount, "PO");
-  validateTotal(messages, invalidFields, "invoice.totalAmount", invoice.quantityBilled, invoice.unitPrice, invoice.totalAmount, "Invoice");
+  validateTotal(messages, invalidFields, fieldErrors, "po.totalAmount", po.quantityOrdered, po.unitPrice, po.totalAmount, "PO");
+  validateTotal(messages, invalidFields, fieldErrors, "invoice.totalAmount", invoice.quantityBilled, invoice.unitPrice, invoice.totalAmount, "Invoice");
 
   [
     ["po.documentDate", po.documentDate, "PO document date must be valid."],
@@ -599,7 +626,7 @@ function calculateValidation(record) {
     ["invoice.documentDate", invoice.documentDate, "Invoice document date must be valid."],
   ].forEach(([field, value, message]) => {
     if (!isValidDate(value)) {
-      pushIssue(messages, invalidFields, field, message);
+      pushIssue(messages, invalidFields, fieldErrors, field, message);
     }
   });
 
@@ -607,6 +634,7 @@ function calculateValidation(record) {
     status: invalidFields.length ? "Invalid" : "Valid",
     invalidFields: [...new Set(invalidFields)],
     messages: invalidFields.length ? [...new Set(messages)] : ["All validation checks passed."],
+    fieldErrors,
   };
 }
 
@@ -781,13 +809,31 @@ function calculateMatching(record) {
     invoiceValue: normaliseValue(row.invoiceValue) || "Missing",
   }));
 
-  const mismatchFields = rows.filter((row) => row.result === "Mismatch").map((row) => row.field);
+  const databaseMismatchFields = (record.databaseExceptions || [])
+    .map((exception) => normaliseValue(exception.description || exception.exception_type))
+    .filter(Boolean);
+  const databaseMismatchKeys = new Set(databaseMismatchFields.map((field) => normaliseHeader(field)));
+
+  rows.forEach((row) => {
+    if (databaseMismatchKeys.has(normaliseHeader(row.field)) || databaseMismatchKeys.has(normaliseHeader(row.label))) {
+      row.result = "Mismatch";
+    }
+  });
+
+  const rowKeys = new Set(rows.flatMap((row) => [normaliseHeader(row.field), normaliseHeader(row.label)]));
+  const unmatchedDatabaseFields = databaseMismatchFields.filter((field) => !rowKeys.has(normaliseHeader(field)));
+  const mismatchFields = [
+    ...rows.filter((row) => row.result === "Mismatch").map((row) => row.field),
+    ...unmatchedDatabaseFields,
+  ].filter((field, index, fields) => fields.indexOf(field) === index);
 
   return {
     status: mismatchFields.length ? "Mismatch" : "Matched",
     rows,
     mismatchFields,
-    message: mismatchFields.length ? "One or more 3-way matching checks failed." : "PO, DO/GRN, and Supplier Invoice match.",
+    message: mismatchFields.length
+      ? "One or more 3-way matching checks or unresolved matching exceptions failed."
+      : "PO, DO/GRN, and Supplier Invoice match.",
   };
 }
 
@@ -950,14 +996,17 @@ async function findOrCreateSupplier(connection, supplierName) {
   }
 
   const supplierId = makeSupplierId();
+  const sandboxRecipient = process.env.PAYPAL_SANDBOX_RECIPIENT_EMAIL || "supplieracc@business.example.com";
 
   await connection.execute(
     `
       INSERT INTO supplier_master
-        (supplier_id, supplier_name, currency, payment_term_code, credit_limit, tax_id, bank_account, bank_name, active_flag)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (supplier_id, supplier_name, currency, payment_term_code, credit_limit, tax_id,
+         bank_account, bank_name, paypal_email, paypal_recipient_verified, active_flag)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [supplierId, cleanedSupplierName, "SGD", "NET30", null, null, null, null, "Y"]
+    [supplierId, cleanedSupplierName, "SGD", "NET30", null, null, null, null,
+      sandboxRecipient, true, "Y"]
   );
 
   const supplier = await findSupplierByNameOrId(connection, cleanedSupplierName);
@@ -983,6 +1032,19 @@ async function saveDocumentSet(record) {
 
   try {
     await connection.beginTransaction();
+    const [submittedPayouts] = await connection.execute(
+      `SELECT pp.id
+       FROM payment_due_list pdl
+       INNER JOIN paypal_payouts pp ON pp.payment_due_id = pdl.payment_due_id
+       WHERE pdl.invoice_id = ?
+       LIMIT 1 FOR UPDATE`,
+      [invoiceId]
+    );
+    if (submittedPayouts[0]) {
+      throw new Error(
+        "This invoice already has a PayPal payout and is locked. Use a new invoice number for a new supplier payment."
+      );
+    }
     const supplierResult = await findOrCreateSupplier(connection, invoice.supplierName || po.supplierName || deliveryOrder.supplierName);
     const supplier = supplierResult.supplier;
     const dueDate = supplier.type === "EOM" ? eomPlusDays(invoiceDate, supplier.days) : addDays(invoiceDate, supplier.days);
@@ -1358,6 +1420,14 @@ async function deletePendingDocumentFromSet(id, documentType) {
 
 async function saveCorrectedData(id, formData) {
   const existingRecord = await getRecord(id);
+  if (
+    existingRecord?.payment?.transactionId ||
+    [paymentStatuses.processing, paymentStatuses.paid].includes(existingRecord?.paymentStatus)
+  ) {
+    throw new Error(
+      "Submitted or completed invoices are locked and cannot be edited. This protects the paid supplier and amount."
+    );
+  }
   return saveDocumentSet({
     ...(existingRecord || {}),
     purchaseOrder: {
@@ -1470,6 +1540,7 @@ async function getReportRows() {
   const records = await getRecords();
   return records.map((record) => ({
     id: record.id,
+    supplierId: record.supplierId,
     supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
     poNumber: record.purchaseOrder?.poNumber || "Missing",
     doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
