@@ -3,6 +3,7 @@ const path = require("path");
 
 const supplierPaymentRoutes = require("./controllers/supplierpaymentcontroller");
 const { ensureDataFile } = require("./models/supplierpayment");
+const { ensurePayPalSchema } = require("./models/paypalpayment");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,6 +29,14 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Autonomous Supplier Payment Process is running at http://localhost:${PORT}`);
+async function start() {
+  await ensurePayPalSchema();
+  app.listen(PORT, () => {
+    console.log(`Autonomous Supplier Payment Process is running at http://localhost:${PORT}`);
+  });
+}
+
+start().catch((error) => {
+  console.error("Application startup failed:", error.message);
+  process.exitCode = 1;
 });

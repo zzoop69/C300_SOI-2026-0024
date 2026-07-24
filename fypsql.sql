@@ -2,6 +2,11 @@ CREATE SCHEMA IF NOT EXISTS `fypSQL` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8m
 USE `fypSQL` ;
 
 -- Drop tables first to avoid foreign key errors when re-running script
+DROP TABLE IF EXISTS `paypal_webhook_events`;
+DROP TABLE IF EXISTS `payment_cashflow_ledger`;
+DROP TABLE IF EXISTS `payment_cash_reservations`;
+DROP TABLE IF EXISTS `paypal_payouts`;
+DROP TABLE IF EXISTS `payment_audit_log`;
 DROP TABLE IF EXISTS `matching_exceptions`;
 DROP TABLE IF EXISTS `payment_due_list`;
 DROP TABLE IF EXISTS `supplier_invoices`;
@@ -9,6 +14,7 @@ DROP TABLE IF EXISTS `delivery_orders`;
 DROP TABLE IF EXISTS `purchase_orders`;
 DROP TABLE IF EXISTS `supplier_master`;
 DROP TABLE IF EXISTS `payment_terms`;
+DROP TABLE IF EXISTS `payment_system_settings`;
 
 -- 1. Payment Terms Table
 CREATE TABLE `payment_terms` (
@@ -30,6 +36,8 @@ CREATE TABLE `supplier_master` (
   `tax_id` VARCHAR(50) NULL,
   `bank_account` VARCHAR(50) NULL,
   `bank_name` VARCHAR(100) NULL,
+  `paypal_email` VARCHAR(254) NULL,
+  `paypal_recipient_verified` BOOLEAN NOT NULL DEFAULT FALSE,
   `active_flag` ENUM('Y', 'N') NOT NULL DEFAULT 'Y',
 
   PRIMARY KEY (`supplier_id`),
@@ -169,6 +177,111 @@ CREATE TABLE `matching_exceptions` (
     ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
+-- 8. Payment workflow audit log
+CREATE TABLE `payment_audit_log` (
+  `audit_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `invoice_id` VARCHAR(20) NULL,
+  `payment_due_id` INT NULL,
+  `action_type` VARCHAR(80) NOT NULL,
+  `action_status` VARCHAR(30) NOT NULL,
+  `review_reason` VARCHAR(100) NULL,
+  `details` VARCHAR(500) NULL,
+  `actor_type` VARCHAR(30) NOT NULL DEFAULT 'SYSTEM',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`audit_id`),
+  KEY `idx_audit_invoice` (`invoice_id`),
+  KEY `idx_audit_payment_due` (`payment_due_id`),
+  CONSTRAINT `fk_audit_invoice`
+    FOREIGN KEY (`invoice_id`) REFERENCES `supplier_invoices` (`invoice_id`)
+    ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT `fk_audit_payment_due`
+    FOREIGN KEY (`payment_due_id`) REFERENCES `payment_due_list` (`payment_due_id`)
+    ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE = InnoDB;
+
+-- 9. PayPal payout audit trail
+CREATE TABLE `paypal_payouts` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `payment_due_id` INT NOT NULL,
+  `supplier_id` VARCHAR(20) NOT NULL,
+  `supplier_name` VARCHAR(150) NOT NULL,
+  `sender_batch_id` VARCHAR(100) NOT NULL,
+  `sender_item_id` VARCHAR(100) NOT NULL,
+  `paypal_batch_id` VARCHAR(50) NULL,
+  `paypal_item_id` VARCHAR(50) NULL,
+  `recipient_email` VARCHAR(254) NOT NULL,
+  `amount` DECIMAL(12,2) NOT NULL,
+  `currency` VARCHAR(10) NOT NULL,
+  `status` VARCHAR(40) NOT NULL,
+  `error_code` VARCHAR(100) NULL,
+  `error_message` VARCHAR(500) NULL,
+  `raw_response` JSON NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_paypal_sender_batch` (`sender_batch_id`),
+  UNIQUE KEY `uq_paypal_sender_item` (`sender_item_id`),
+  UNIQUE KEY `uq_paypal_batch` (`paypal_batch_id`),
+  UNIQUE KEY `uq_paypal_item` (`paypal_item_id`),
+  CONSTRAINT `fk_paypal_payment_due` FOREIGN KEY (`payment_due_id`)
+    REFERENCES `payment_due_list` (`payment_due_id`) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE `paypal_webhook_events` (
+  `event_id` VARCHAR(100) NOT NULL,
+  `event_type` VARCHAR(100) NOT NULL,
+  `received_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`event_id`)
+) ENGINE = InnoDB;
+
+-- Simulated cash balance used only by the PayPal Sandbox workflow
+CREATE TABLE `payment_system_settings` (
+  `setting_key` VARCHAR(80) NOT NULL,
+  `setting_value` VARCHAR(255) NOT NULL DEFAULT '',
+  `decimal_value` DECIMAL(14,2) NOT NULL,
+  `currency` VARCHAR(10) NOT NULL DEFAULT 'SGD',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`setting_key`)
+) ENGINE = InnoDB;
+
+INSERT INTO `payment_system_settings` (`setting_key`, `setting_value`, `decimal_value`, `currency`)
+VALUES ('simulated_available_cash', '100000.00', 100000.00, 'SGD');
+
+CREATE TABLE `payment_cash_reservations` (
+  `reservation_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `payment_due_id` INT NOT NULL,
+  `paypal_payout_id` BIGINT NOT NULL,
+  `amount` DECIMAL(12,2) NOT NULL,
+  `currency` VARCHAR(10) NOT NULL,
+  `status` ENUM('RESERVED','SETTLED','RELEASED') NOT NULL DEFAULT 'RESERVED',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`reservation_id`),
+  KEY `idx_cash_reservation_payment` (`payment_due_id`),
+  UNIQUE KEY `uq_cash_reservation_payout` (`paypal_payout_id`),
+  CONSTRAINT `fk_cash_reservation_payment` FOREIGN KEY (`payment_due_id`)
+    REFERENCES `payment_due_list` (`payment_due_id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_cash_reservation_payout` FOREIGN KEY (`paypal_payout_id`)
+    REFERENCES `paypal_payouts` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE `payment_cashflow_ledger` (
+  `ledger_id` BIGINT NOT NULL AUTO_INCREMENT,
+  `reservation_id` BIGINT NOT NULL,
+  `payment_due_id` INT NOT NULL,
+  `paypal_payout_id` BIGINT NOT NULL,
+  `action_type` ENUM('RESERVE','SETTLE','RELEASE') NOT NULL,
+  `amount` DECIMAL(12,2) NOT NULL,
+  `currency` VARCHAR(10) NOT NULL,
+  `available_cash_after` DECIMAL(14,2) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`ledger_id`),
+  KEY `idx_cashflow_payment` (`payment_due_id`),
+  KEY `idx_cashflow_payout` (`paypal_payout_id`),
+  CONSTRAINT `fk_cashflow_reservation` FOREIGN KEY (`reservation_id`)
+    REFERENCES `payment_cash_reservations` (`reservation_id`) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
 INSERT INTO payment_terms
 (term_code, description, days, type)
 VALUES
@@ -177,11 +290,11 @@ VALUES
 ('EOM30', 'End of month plus 30 days', 30, 'EOM');
 
 INSERT INTO supplier_master
-(supplier_id, supplier_name, currency, payment_term_code, credit_limit, tax_id, bank_account, bank_name, active_flag)
+(supplier_id, supplier_name, currency, payment_term_code, credit_limit, tax_id, bank_account, bank_name, paypal_email, paypal_recipient_verified, active_flag)
 VALUES
-('SUP001', 'Alpha Industrial Pte Ltd', 'SGD', 'NET30', 100000.00, '201912345Z', 'DBS-123456', 'DBS Bank', 'Y'),
-('SUP002', 'Beta Office Supplies', 'SGD', 'NET60', 50000.00, '202012345A', 'OCBC-888999', 'OCBC Bank', 'Y'),
-('SUP003', 'Gamma Tech Parts', 'USD', 'EOM30', 75000.00, '202112345B', 'UOB-555666', 'UOB Bank', 'N');
+('SUP001', 'Alpha Industrial Pte Ltd', 'SGD', 'NET30', 100000.00, '201912345Z', 'DBS-123456', 'DBS Bank', 'supplieracc@business.example.com', TRUE, 'Y'),
+('SUP002', 'Beta Office Supplies', 'SGD', 'NET60', 50000.00, '202012345A', 'OCBC-888999', 'OCBC Bank', 'supplieracc@business.example.com', TRUE, 'Y'),
+('SUP003', 'Gamma Tech Parts', 'USD', 'EOM30', 75000.00, '202112345B', 'UOB-555666', 'UOB Bank', 'supplieracc@business.example.com', TRUE, 'N');
 
 INSERT INTO purchase_orders
 (po_id, supplier_id, po_date, item_id, description, qty_ordered, unit_price, currency, total_amount)

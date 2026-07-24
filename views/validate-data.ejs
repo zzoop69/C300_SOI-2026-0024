@@ -12,12 +12,24 @@
     </div>
   </div>
 
+  <nav class="validation-filter-tabs" aria-label="Filter validation records">
+    <button class="active" type="button" data-validation-filter="all" aria-pressed="true">All Data</button>
+    <button type="button" data-validation-filter="Valid" aria-pressed="false">Valid Data</button>
+    <button type="button" data-validation-filter="Invalid" aria-pressed="false">Invalid Data</button>
+  </nav>
+
   <% if (records.length === 0) { %>
-    <div class="empty-state">No records to validate.</div>
+    <div id="validationEmptyState" class="empty-state">No records to validate.</div>
+  <% } else { %>
+    <div id="validationEmptyState" class="empty-state" hidden></div>
   <% } %>
 
   <% records.forEach((record) => { %>
-    <article class="match-block <%= String(record.id) === String(selectedRecordId) ? 'selected-block' : '' %>">
+    <article
+      class="match-block <%= String(record.id) === String(selectedRecordId) ? 'selected-block' : '' %>"
+      data-validation-record
+      data-validation-status="<%= record.validation.status %>"
+    >
       <div class="match-title">
         <div>
           <h3>Record #<%= record.id %></h3>
@@ -34,9 +46,53 @@
         </div>
       <% } %>
 
-      <a class="table-link" href="/extract/<%= record.id %>">Correct highlighted fields</a>
+      <% if (record.validation.status === "Invalid") { %>
+        <a class="table-link" href="/extract/<%= record.id %>?mode=edit&amp;from=validate-data">Correct highlighted fields</a>
+      <% } else { %>
+        <a class="table-link" href="/extract/<%= record.id %>?mode=view&amp;from=validate-data">View fields</a>
+      <% } %>
     </article>
   <% }) %>
 </section>
+
+<script>
+  (() => {
+    const tabs = [...document.querySelectorAll("[data-validation-filter]")];
+    const records = [...document.querySelectorAll("[data-validation-record]")];
+    const emptyState = document.getElementById("validationEmptyState");
+
+    function applyValidationFilter(selectedTab) {
+      const filter = selectedTab.dataset.validationFilter;
+      let visibleCount = 0;
+
+      tabs.forEach((tab) => {
+        const isActive = tab === selectedTab;
+        tab.classList.toggle("active", isActive);
+        tab.setAttribute("aria-pressed", String(isActive));
+      });
+
+      records.forEach((record) => {
+        const isVisible = filter === "all" || record.dataset.validationStatus === filter;
+        record.hidden = !isVisible;
+        if (isVisible) visibleCount += 1;
+      });
+
+      if (emptyState) {
+        emptyState.hidden = visibleCount !== 0;
+        if (visibleCount === 0) {
+          emptyState.textContent = filter === "Invalid"
+            ? "No invalid data found"
+            : filter === "Valid"
+              ? "No valid data found"
+              : "No records to validate.";
+        }
+      }
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => applyValidationFilter(tab));
+    });
+  })();
+</script>
 
 <%- include("partials/footer") %>

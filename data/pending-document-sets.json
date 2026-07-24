@@ -360,5 +360,70 @@
     "lastUploadedAt": "2026-06-30T07:41:24.786Z",
     "extractedRecordId": "INV-2026-008",
     "status": "Ready for Validation"
+  },
+  {
+    "id": "PDS-MRYO4A5P-NBZUF",
+    "poNumber": "PO-013",
+    "supplierName": "Metro Clean Solutions Pte Ltd",
+    "documents": {
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "DO_GRN-013.xlsx",
+          "storedName": "03dd683a243a505094d3f636adfda792",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\03dd683a243a505094d3f636adfda792",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-013",
+          "supplierName": "Metro Clean Solutions Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "DO-013",
+          "documentDate": ""
+        },
+        "uploadedAt": "2026-07-24T08:18:13.766Z"
+      },
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "PO-013.xlsx",
+          "storedName": "7561bb159d64c93ab25daa55bb2d84a9",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\7561bb159d64c93ab25daa55bb2d84a9",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-013",
+          "supplierName": "Metro Clean Solutions Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-07-19"
+        },
+        "uploadedAt": "2026-07-24T08:28:49.695Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "INVOICE-013.xlsx",
+          "storedName": "7c0f323caeb5f4a3f4a23a2887cd80ae",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\7c0f323caeb5f4a3f4a23a2887cd80ae",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-013",
+          "supplierName": "Metro Clean Solutions Pte Ltd",
+          "invoiceNumber": "INV-013",
+          "doGrnNumber": "",
+          "documentDate": "2026-07-22"
+        },
+        "uploadedAt": "2026-07-24T08:28:49.717Z"
+      }
+    },
+    "createdAt": "2026-07-24T08:18:13.735Z",
+    "lastUploadedAt": "2026-07-24T08:28:49.717Z",
+    "extractedRecordId": "INV-013",
+    "status": "Ready for Validation"
   }
 ]
