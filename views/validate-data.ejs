@@ -32,7 +32,10 @@
     >
       <div class="match-title">
         <div>
-          <h3>Record #<%= record.id %></h3>
+          <h3>
+            Record #<%= record.id %> ·
+            <%= record.invoice?.supplierName || record.purchaseOrder?.supplierName || record.deliveryOrder?.supplierName || "Supplier needs review" %>
+          </h3>
           <p><%= record.validation.messages.join(" ") %></p>
         </div>
         <span class="status <%= record.validation.status.toLowerCase().replaceAll(' ', '-') %>"><%= record.validation.status %></span>

@@ -59,7 +59,7 @@
               data-upload-date="<%= String(record.createdAt || "").slice(0, 10) %>"
             >
               <td>#<%= record.id %></td>
-              <td><%= new Date(record.createdAt).toLocaleDateString() %></td>
+              <td><%= new Date(record.createdAt).toLocaleDateString("en-GB") %></td>
               <td><%= record.purchaseOrderFile?.originalName || "Missing" %></td>
               <td><%= record.deliveryOrderFile?.originalName || "Missing" %></td>
               <td><%= record.invoiceFile?.originalName || "Missing" %></td>

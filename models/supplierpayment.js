@@ -123,7 +123,59 @@ function emptyInvoice() {
     unitPrice: "",
     totalAmount: "",
     documentDate: "",
+    paymentTermCode: "",
   };
+}
+
+function normalisePaymentTerm(value) {
+  const compact = normaliseValue(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (["DUEONRECEIPT", "DUEUPONRECEIPT", "IMMEDIATE"].includes(compact)) {
+    return "DUEONRECEIPT";
+  }
+  return compact;
+}
+
+function paymentTermLabel(value) {
+  const term = normalisePaymentTerm(value);
+  const netMatch = term.match(/^NET(\d+)$/);
+  if (netMatch) return `Net ${netMatch[1]}`;
+  if (term === "DUEONRECEIPT") return "Due on Receipt";
+  return normaliseValue(value);
+}
+
+function paymentTermDefinition(value) {
+  const termCode = normalisePaymentTerm(value);
+  const netMatch = termCode.match(/^NET(\d{1,4})$/);
+  const eomMatch = termCode.match(/^EOM(\d{1,4})$/);
+
+  if (termCode === "DUEONRECEIPT") {
+    return {
+      termCode,
+      description: "Due on receipt",
+      days: 0,
+      type: "FIXED",
+    };
+  }
+
+  if (netMatch && Number(netMatch[1]) <= 3650) {
+    return {
+      termCode,
+      description: `Pay in ${Number(netMatch[1])} days`,
+      days: Number(netMatch[1]),
+      type: "FIXED",
+    };
+  }
+
+  if (eomMatch && Number(eomMatch[1]) <= 3650) {
+    return {
+      termCode,
+      description: `End of month plus ${Number(eomMatch[1])} days`,
+      days: Number(eomMatch[1]),
+      type: "EOM",
+    };
+  }
+
+  return null;
 }
 
 function normaliseHeader(header) {
@@ -266,6 +318,9 @@ function extractInvoice(file) {
     unitPrice: normaliseValue(getColumn(row, ["Unit Price", "Price"])),
     totalAmount: normaliseValue(getColumn(row, ["Total Amount", "Item Total", "Subtotal", "Total Price", "Amount"])),
     documentDate: formatDate(getColumn(row, ["Document Date", "Invoice Date", "Order Date", "Date"])),
+    paymentTermCode: normalisePaymentTerm(
+      getColumn(row, ["Payment Terms", "Payment Term", "Payment Term Code", "Terms"])
+    ),
   };
 }
 
@@ -287,16 +342,37 @@ function valuesMatch(firstValue, secondValue) {
 }
 
 function addDays(dateValue, days) {
-  const date = new Date(`${dateValue}T00:00:00`);
-  date.setDate(date.getDate() + Number(days || 0));
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
   return date.toISOString().slice(0, 10);
 }
 
 function eomPlusDays(dateValue, days) {
-  const date = new Date(`${dateValue}T00:00:00`);
-  const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  endOfMonth.setDate(endOfMonth.getDate() + Number(days || 0));
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  const endOfMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+  endOfMonth.setUTCDate(endOfMonth.getUTCDate() + Number(days || 0));
   return endOfMonth.toISOString().slice(0, 10);
+}
+
+function calculatePaymentSchedule(dueDateValue, currentDate = new Date()) {
+  const dueDate = formatDate(dueDateValue);
+  if (!dueDate) {
+    return { dueDate: "", daysRemaining: null, priority: "Manual Review Required" };
+  }
+
+  const todayKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+  const daysRemaining = Math.round(
+    (new Date(`${dueDate}T00:00:00`) - new Date(`${todayKey}T00:00:00`)) / 86400000
+  );
+  const priority = daysRemaining < 0
+    ? "Overdue"
+    : daysRemaining <= 7
+      ? "High"
+      : daysRemaining <= 14
+        ? "Medium"
+        : "Low";
+
+  return { dueDate, daysRemaining, priority };
 }
 
 function sqlDate(value) {
@@ -369,6 +445,79 @@ function approvalStatusLabel(paymentStatus) {
 }
 
 let paymentStatusColumnReady;
+let invoicePaymentTermSchemaReady;
+
+async function ensureInvoicePaymentTermSchema() {
+  if (!invoicePaymentTermSchemaReady) {
+    invoicePaymentTermSchemaReady = (async () => {
+      const [columns] = await db.execute(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'supplier_invoices'
+           AND COLUMN_NAME IN ('payment_term_code', 'extracted_payment_term', 'uploaded_at')`
+      );
+      const columnNames = new Set(columns.map((row) => row.COLUMN_NAME));
+
+      if (!columnNames.has("payment_term_code")) {
+        await db.execute(
+          "ALTER TABLE supplier_invoices ADD COLUMN payment_term_code VARCHAR(20) NULL AFTER currency"
+        );
+      }
+      if (!columnNames.has("extracted_payment_term")) {
+        await db.execute(
+          "ALTER TABLE supplier_invoices ADD COLUMN extracted_payment_term VARCHAR(100) NULL AFTER payment_term_code"
+        );
+      }
+      if (!columnNames.has("uploaded_at")) {
+        await db.execute(
+          "ALTER TABLE supplier_invoices ADD COLUMN uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER extracted_payment_term"
+        );
+      }
+
+      await db.execute(
+        `INSERT INTO payment_terms (term_code, description, days, type)
+         VALUES ('DUEONRECEIPT', 'Due on receipt', 0, 'FIXED')
+         ON DUPLICATE KEY UPDATE description = VALUES(description), days = VALUES(days), type = VALUES(type)`
+      );
+      await db.execute("ALTER TABLE supplier_invoices MODIFY invoice_date DATE NULL");
+      await db.execute("ALTER TABLE payment_due_list MODIFY invoice_date DATE NULL");
+      await db.execute("ALTER TABLE payment_due_list MODIFY due_date DATE NULL");
+      await db.execute(
+        `UPDATE payment_due_list pdl
+         INNER JOIN supplier_invoices si ON si.invoice_id = pdl.invoice_id
+         LEFT JOIN payment_terms ipt ON ipt.term_code = si.payment_term_code
+         SET pdl.invoice_date = si.invoice_date,
+             pdl.due_date = CASE
+               WHEN si.invoice_date IS NULL OR ipt.term_code IS NULL THEN NULL
+               WHEN ipt.type = 'EOM' THEN DATE_ADD(LAST_DAY(si.invoice_date), INTERVAL ipt.days DAY)
+               ELSE DATE_ADD(si.invoice_date, INTERVAL ipt.days DAY)
+             END`
+      );
+
+      const [constraints] = await db.execute(
+        `SELECT CONSTRAINT_NAME
+         FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'supplier_invoices'
+           AND CONSTRAINT_NAME = 'fk_invoice_payment_term'`
+      );
+      if (!constraints.length) {
+        await db.execute(
+          `ALTER TABLE supplier_invoices
+           ADD CONSTRAINT fk_invoice_payment_term
+           FOREIGN KEY (payment_term_code) REFERENCES payment_terms(term_code)
+           ON UPDATE CASCADE ON DELETE RESTRICT`
+        );
+      }
+    })().catch((error) => {
+      invoicePaymentTermSchemaReady = null;
+      throw error;
+    });
+  }
+
+  return invoicePaymentTermSchemaReady;
+}
 
 async function ensurePaymentStatusColumnSupportsWorkflow() {
   if (!paymentStatusColumnReady) {
@@ -412,6 +561,7 @@ async function ensurePaymentStatusColumnSupportsWorkflow() {
 }
 
 async function queryRecords(whereClause = "", values = []) {
+  await ensureInvoicePaymentTermSchema();
   const [rows] = await db.execute(
     `
       SELECT
@@ -420,14 +570,19 @@ async function queryRecords(whereClause = "", values = []) {
         si.po_id,
         si.do_id,
         si.invoice_date,
+        si.uploaded_at,
         si.item_id AS invoice_item_id,
         si.qty_invoiced,
         si.unit_price AS invoice_unit_price,
         si.tax_amount,
         si.total_amount AS invoice_total_amount,
         si.currency AS invoice_currency,
+        si.payment_term_code AS invoice_payment_term_code,
+        si.extracted_payment_term,
         sm.supplier_name,
         sm.active_flag,
+        sm.payment_term_code AS supplier_payment_term_code,
+        CASE WHEN ipt.term_code IS NULL THEN 0 ELSE 1 END AS invoice_payment_term_known,
         pt.days AS payment_term_days,
         pt.type AS payment_term_type,
         po.po_date,
@@ -457,6 +612,7 @@ async function queryRecords(whereClause = "", values = []) {
       FROM supplier_invoices si
       INNER JOIN supplier_master sm ON sm.supplier_id = si.supplier_id
       INNER JOIN payment_terms pt ON pt.term_code = sm.payment_term_code
+      LEFT JOIN payment_terms ipt ON ipt.term_code = si.payment_term_code
       INNER JOIN purchase_orders po ON po.po_id = si.po_id
       LEFT JOIN delivery_orders dox ON dox.do_id = si.do_id
       LEFT JOIN payment_due_list pdl ON pdl.invoice_id = si.invoice_id
@@ -466,7 +622,11 @@ async function queryRecords(whereClause = "", values = []) {
         WHERE pp_latest.payment_due_id = pdl.payment_due_id
       )
       ${whereClause}
-      ORDER BY si.invoice_date DESC, si.invoice_id DESC
+      ORDER BY
+        CASE WHEN pdl.due_date IS NULL THEN 1 ELSE 0 END,
+        pdl.due_date ASC,
+        si.invoice_date ASC,
+        si.invoice_id ASC
     `,
     values
   );
@@ -502,7 +662,7 @@ function rowToRecord(row, exceptions) {
 
   return {
     id: row.invoice_id,
-    createdAt: row.invoice_date,
+    createdAt: row.uploaded_at,
     purchaseOrderFile: { originalName: `${row.po_id}.sql`, storedName: row.po_id },
     deliveryOrderFile: row.do_id ? { originalName: `${row.do_id}.sql`, storedName: row.do_id } : null,
     invoiceFile: { originalName: `${row.invoice_id}.sql`, storedName: row.invoice_id },
@@ -533,10 +693,14 @@ function rowToRecord(row, exceptions) {
       unitPrice: normaliseValue(row.invoice_unit_price),
       totalAmount: normaliseValue(row.invoice_total_amount),
       documentDate: row.invoice_date,
+      paymentTermCode: normaliseValue(row.extracted_payment_term || row.invoice_payment_term_code),
+      paymentTermKnown: Boolean(row.invoice_payment_term_known),
     },
+    supplierPaymentTermCode: normaliseValue(row.supplier_payment_term_code),
     dbPaymentStatus: row.payment_status || dbPaymentStatuses.held,
     dbExceptionFlag: row.exception_flag || (exceptions.length ? "Y" : "N"),
     paymentCurrency: row.payment_currency || row.invoice_currency || row.po_currency || "SGD",
+    dueDate: row.due_date || "",
     extractionStatus: row.do_id ? "Extracted" : "Needs Review",
     paymentStatus,
     approvalStatus: approvalStatusLabel(paymentStatus),
@@ -604,6 +768,30 @@ function calculateValidation(record) {
       pushIssue(messages, invalidFields, fieldErrors, field, message);
     }
   });
+
+  const invoicePaymentTerm = normalisePaymentTerm(invoice.paymentTermCode);
+  if (!invoicePaymentTerm) {
+    pushIssue(messages, invalidFields, fieldErrors, "invoice.paymentTermCode", "Invoice payment terms are required.");
+  } else if (invoice.paymentTermKnown === false) {
+    pushIssue(
+      messages,
+      invalidFields,
+      fieldErrors,
+      "invoice.paymentTermCode",
+      `Invoice payment term ${invoicePaymentTerm} is not configured in the payment terms master.`
+    );
+  } else if (
+    record.supplierPaymentTermCode &&
+    invoicePaymentTerm !== normalisePaymentTerm(record.supplierPaymentTermCode)
+  ) {
+    pushIssue(
+      messages,
+      invalidFields,
+      fieldErrors,
+      "invoice.paymentTermCode",
+      `Invoice payment term ${invoicePaymentTerm} does not match the supplier master term ${record.supplierPaymentTermCode}.`
+    );
+  }
 
   [
     ["po.quantityOrdered", po.quantityOrdered, "Quantity ordered must be positive."],
@@ -827,10 +1015,65 @@ function calculateMatching(record) {
     ...unmatchedDatabaseFields,
   ].filter((field, index, fields) => fields.indexOf(field) === index);
 
+  const fieldErrors = {};
+  const addFieldError = (fieldKeys, message) => {
+    fieldKeys.forEach((fieldKey) => {
+      fieldErrors[fieldKey] ||= [];
+      if (!fieldErrors[fieldKey].includes(message)) {
+        fieldErrors[fieldKey].push(message);
+      }
+    });
+  };
+
+  rows.filter((row) => row.result === "Mismatch").forEach((row) => {
+    if (row.field === "supplierName") {
+      addFieldError(
+        ["po.supplierName", "do.supplierName", "invoice.supplierName"],
+        `Document mismatch: Supplier Name differs across PO (${row.poValue}), DO (${row.doGrnValue}), and Invoice (${row.invoiceValue}).`
+      );
+    } else if (row.field === "poNumber") {
+      addFieldError(
+        ["po.poNumber", "do.poNumber", "invoice.poNumber"],
+        `Document mismatch: PO Reference Number differs across PO (${row.poValue}), DO (${row.doGrnValue}), and Invoice (${row.invoiceValue}).`
+      );
+    } else if (row.field === "itemDescription") {
+      addFieldError(
+        ["po.itemDescription", "do.itemDescription", "invoice.itemDescription"],
+        `Document mismatch: Item Description differs across PO (${row.poValue}), DO (${row.doGrnValue}), and Invoice (${row.invoiceValue}).`
+      );
+    } else if (row.field === "quantityOrdered") {
+      addFieldError(
+        ["po.quantityOrdered", "do.quantityReceived"],
+        `Document mismatch: Quantity Ordered (${row.poValue}) does not match Quantity Received (${row.doGrnValue}).`
+      );
+    } else if (row.field === "quantityBilled") {
+      addFieldError(
+        ["po.quantityOrdered", "invoice.quantityBilled"],
+        `Document mismatch: Quantity Ordered (${row.poValue}) does not match Quantity Billed (${row.invoiceValue}).`
+      );
+    } else if (row.field === "quantityReceived") {
+      addFieldError(
+        ["do.quantityReceived", "invoice.quantityBilled"],
+        `Document mismatch: Quantity Received (${row.doGrnValue}) does not match Quantity Billed (${row.invoiceValue}).`
+      );
+    } else if (row.field === "unitPrice") {
+      addFieldError(
+        ["po.unitPrice", "invoice.unitPrice"],
+        `Document mismatch: PO Unit Price (${row.poValue}) does not match Invoice Unit Price (${row.invoiceValue}).`
+      );
+    } else if (row.field === "totalAmount") {
+      addFieldError(
+        ["po.totalAmount", "invoice.totalAmount"],
+        `Document mismatch: PO Total Amount (${row.poValue}) does not match Invoice Total Amount (${row.invoiceValue}).`
+      );
+    }
+  });
+
   return {
     status: mismatchFields.length ? "Mismatch" : "Matched",
     rows,
     mismatchFields,
+    fieldErrors,
     message: mismatchFields.length
       ? "One or more 3-way matching checks or unresolved matching exceptions failed."
       : "PO, DO/GRN, and Supplier Invoice match.",
@@ -923,6 +1166,7 @@ function decorateRecord(record) {
   const discrepancies = calculateDiscrepancies(record);
   const unresolvedDiscrepancies = discrepancies.filter((discrepancy) => !discrepancy.resolved);
   const canApprovePayment = matching.status === "Matched" && validation.status === "Valid" && unresolvedDiscrepancies.length === 0;
+  const schedule = calculatePaymentSchedule(record.dueDate);
 
   return {
     ...record,
@@ -932,6 +1176,10 @@ function decorateRecord(record) {
     unresolvedDiscrepancies,
     canApprovePayment,
     amountPayable: record.invoice?.totalAmount || record.purchaseOrder?.totalAmount || "0",
+    dueDate: schedule.dueDate,
+    daysRemaining: schedule.daysRemaining,
+    paymentPriority: schedule.priority,
+    paymentTermDisplay: paymentTermLabel(record.invoice?.paymentTermCode),
   };
 }
 
@@ -968,7 +1216,7 @@ function makeSupplierId() {
 async function findSupplierByNameOrId(connection, supplierName) {
   const [rows] = await connection.execute(
     `
-      SELECT sm.supplier_id, sm.supplier_name, sm.currency, pt.days, pt.type
+      SELECT sm.supplier_id, sm.supplier_name, sm.currency, sm.payment_term_code, pt.days, pt.type
       FROM supplier_master sm
       INNER JOIN payment_terms pt ON pt.term_code = sm.payment_term_code
       WHERE sm.supplier_name = ? OR sm.supplier_id = ?
@@ -979,7 +1227,39 @@ async function findSupplierByNameOrId(connection, supplierName) {
   return rows[0] || null;
 }
 
-async function findOrCreateSupplier(connection, supplierName) {
+async function findPaymentTerm(connection, paymentTermCode) {
+  const normalisedTerm = normalisePaymentTerm(paymentTermCode);
+  const [rows] = await connection.execute(
+    "SELECT term_code, days, type FROM payment_terms WHERE term_code = ? LIMIT 1",
+    [normalisedTerm]
+  );
+  if (rows[0]) {
+    return rows[0];
+  }
+
+  const definition = paymentTermDefinition(normalisedTerm);
+  if (!definition) {
+    return null;
+  }
+
+  await connection.execute(
+    `INSERT INTO payment_terms (term_code, description, days, type)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       description = VALUES(description),
+       days = VALUES(days),
+       type = VALUES(type)`,
+    [definition.termCode, definition.description, definition.days, definition.type]
+  );
+
+  const [createdRows] = await connection.execute(
+    "SELECT term_code, days, type FROM payment_terms WHERE term_code = ? LIMIT 1",
+    [definition.termCode]
+  );
+  return createdRows[0] || null;
+}
+
+async function findOrCreateSupplier(connection, supplierName, invoicePaymentTerm) {
   const cleanedSupplierName = normaliseValue(supplierName);
 
   if (!cleanedSupplierName) {
@@ -995,6 +1275,12 @@ async function findOrCreateSupplier(connection, supplierName) {
     };
   }
 
+  if (!invoicePaymentTerm) {
+    throw new Error(
+      "A new supplier cannot be created because the invoice payment term is missing or is not configured in the payment terms master."
+    );
+  }
+
   const supplierId = makeSupplierId();
   const sandboxRecipient = process.env.PAYPAL_SANDBOX_RECIPIENT_EMAIL || "supplieracc@business.example.com";
 
@@ -1005,7 +1291,7 @@ async function findOrCreateSupplier(connection, supplierName) {
          bank_account, bank_name, paypal_email, paypal_recipient_verified, active_flag)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [supplierId, cleanedSupplierName, "SGD", "NET30", null, null, null, null,
+    [supplierId, cleanedSupplierName, "SGD", invoicePaymentTerm.term_code, null, null, null, null,
       sandboxRecipient, true, "Y"]
   );
 
@@ -1026,8 +1312,9 @@ async function saveDocumentSet(record) {
   const doId = deliveryOrder.doGrnNumber || null;
   const itemId = makeItemId(po.itemDescription || invoice.itemDescription);
   const poDate = sqlDate(po.documentDate);
-  const invoiceDate = sqlDate(invoice.documentDate);
+  const invoiceDate = formatDate(invoice.documentDate) || null;
   await ensurePaymentStatusColumnSupportsWorkflow();
+  await ensureInvoicePaymentTermSchema();
   const connection = await db.getConnection();
 
   try {
@@ -1045,9 +1332,21 @@ async function saveDocumentSet(record) {
         "This invoice already has a PayPal payout and is locked. Use a new invoice number for a new supplier payment."
       );
     }
-    const supplierResult = await findOrCreateSupplier(connection, invoice.supplierName || po.supplierName || deliveryOrder.supplierName);
+    const extractedPaymentTerm = normalisePaymentTerm(invoice.paymentTermCode);
+    const invoicePaymentTerm = extractedPaymentTerm
+      ? await findPaymentTerm(connection, extractedPaymentTerm)
+      : null;
+    const supplierResult = await findOrCreateSupplier(
+      connection,
+      invoice.supplierName || po.supplierName || deliveryOrder.supplierName,
+      invoicePaymentTerm
+    );
     const supplier = supplierResult.supplier;
-    const dueDate = supplier.type === "EOM" ? eomPlusDays(invoiceDate, supplier.days) : addDays(invoiceDate, supplier.days);
+    const dueDate = invoiceDate && invoicePaymentTerm
+      ? (invoicePaymentTerm.type === "EOM"
+          ? eomPlusDays(invoiceDate, invoicePaymentTerm.days)
+          : addDays(invoiceDate, invoicePaymentTerm.days))
+      : null;
 
     await connection.execute(
       `
@@ -1086,8 +1385,9 @@ async function saveDocumentSet(record) {
     await connection.execute(
       `
         INSERT INTO supplier_invoices
-          (invoice_id, supplier_id, po_id, do_id, invoice_date, item_id, qty_invoiced, unit_price, tax_amount, total_amount, currency)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (invoice_id, supplier_id, po_id, do_id, invoice_date, item_id, qty_invoiced, unit_price,
+           tax_amount, total_amount, currency, payment_term_code, extracted_payment_term)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           supplier_id = VALUES(supplier_id),
           po_id = VALUES(po_id),
@@ -1098,9 +1398,14 @@ async function saveDocumentSet(record) {
           unit_price = VALUES(unit_price),
           tax_amount = VALUES(tax_amount),
           total_amount = VALUES(total_amount),
-          currency = VALUES(currency)
+          currency = VALUES(currency),
+          payment_term_code = VALUES(payment_term_code),
+          extracted_payment_term = VALUES(extracted_payment_term)
+          ${record.preserveUploadedAt ? "" : ", uploaded_at = CURRENT_TIMESTAMP"}
       `,
-      [invoiceId, supplier.supplier_id, poId, doId, invoiceDate, itemId, money(invoice.quantityBilled), money(invoice.unitPrice), 0, money(invoice.totalAmount), supplier.currency]
+      [invoiceId, supplier.supplier_id, poId, doId, invoiceDate, itemId, money(invoice.quantityBilled),
+        money(invoice.unitPrice), 0, money(invoice.totalAmount), supplier.currency,
+        invoicePaymentTerm?.term_code || null, extractedPaymentTerm || null]
     );
 
     const draftRecord = decorateRecord({
@@ -1109,10 +1414,18 @@ async function saveDocumentSet(record) {
       purchaseOrderFile: record.purchaseOrderFile || { originalName: `${poId}.sql`, storedName: poId },
       deliveryOrderFile: doId ? record.deliveryOrderFile || { originalName: `${doId}.sql`, storedName: doId } : null,
       invoiceFile: record.invoiceFile || { originalName: `${invoiceId}.sql`, storedName: invoiceId },
+      supplierPaymentTermCode: supplier.payment_term_code,
+      invoice: {
+        ...invoice,
+        paymentTermCode: extractedPaymentTerm,
+        paymentTermKnown: Boolean(invoicePaymentTerm),
+      },
       databaseExceptions: [],
     });
     const exceptionFlag = draftRecord.discrepancies.length ? "Y" : "N";
-    const paymentStatus = draftRecord.canApprovePayment ? dbPaymentStatuses.approved : dbPaymentStatuses.held;
+    // Every invoice requires an explicit manager decision. Document eligibility
+    // enables Accept, but must never approve a payment automatically.
+    const paymentStatus = dbPaymentStatuses.held;
 
     await connection.execute(
       `
@@ -1418,18 +1731,9 @@ async function deletePendingDocumentFromSet(id, documentType) {
   return true;
 }
 
-async function saveCorrectedData(id, formData) {
-  const existingRecord = await getRecord(id);
-  if (
-    existingRecord?.payment?.transactionId ||
-    [paymentStatuses.processing, paymentStatuses.paid].includes(existingRecord?.paymentStatus)
-  ) {
-    throw new Error(
-      "Submitted or completed invoices are locked and cannot be edited. This protects the paid supplier and amount."
-    );
-  }
-  return saveDocumentSet({
-    ...(existingRecord || {}),
+function buildCorrectedDraft(existingRecord, id, formData) {
+  return {
+    ...existingRecord,
     purchaseOrder: {
       supplierName: formData.poSupplierName || "",
       poNumber: formData.poNumber || "",
@@ -1456,8 +1760,50 @@ async function saveCorrectedData(id, formData) {
       unitPrice: formData.invoiceUnitPrice || "",
       totalAmount: formData.invoiceTotalAmount || "",
       documentDate: formData.invoiceDocumentDate || "",
+      paymentTermCode: normalisePaymentTerm(formData.invoicePaymentTermCode),
+      paymentTermKnown: existingRecord.invoice?.paymentTermKnown,
     },
+  };
+}
+
+async function saveCorrectedData(id, formData) {
+  const existingRecord = await getRecord(id);
+  if (!existingRecord) {
+    throw new Error("The extracted invoice record could not be found.");
+  }
+  if (
+    existingRecord?.payment?.transactionId ||
+    [paymentStatuses.processing, paymentStatuses.paid].includes(existingRecord?.paymentStatus)
+  ) {
+    throw new Error(
+      "Submitted or completed invoices are locked and cannot be edited. This protects the paid supplier and amount."
+    );
+  }
+
+  const correctedDraft = buildCorrectedDraft(existingRecord, id, formData);
+  const correctedTerm = normalisePaymentTerm(correctedDraft.invoice.paymentTermCode);
+  if (correctedTerm) {
+    correctedDraft.invoice.paymentTermKnown = Boolean(await findPaymentTerm(db, correctedTerm));
+  } else {
+    correctedDraft.invoice.paymentTermKnown = false;
+  }
+  const draftRecord = decorateRecord(correctedDraft);
+  if (draftRecord.validation.status === "Invalid") {
+    return {
+      saved: false,
+      recordId: id,
+      record: draftRecord,
+    };
+  }
+
+  const result = await saveDocumentSet({
+    ...draftRecord,
+    preserveUploadedAt: true,
   });
+  return {
+    saved: true,
+    ...result,
+  };
 }
 
 async function setPaymentStatus(id, paymentStatus) {
@@ -1538,27 +1884,43 @@ async function getStats() {
 
 async function getReportRows() {
   const records = await getRecords();
-  return records.map((record) => ({
-    id: record.id,
-    supplierId: record.supplierId,
-    supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
-    poNumber: record.purchaseOrder?.poNumber || "Missing",
-    doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
-    invoiceNumber: record.invoice?.invoiceNumber || "Missing",
-    amount: record.amountPayable,
-    matchStatus: record.matching.status,
-    validationStatus: record.validation.status,
-    approvalStatus: record.approvalStatus,
-    paymentStatus: record.paymentStatus,
-    transactionId: record.payment?.transactionId || "-",
-    paymentMethod: record.payment?.method || "-",
-    paidAt: record.payment?.paidAt || "",
-    actionDate: record.payment?.paidAt || record.createdAt || "",
-  }));
+  return records.map((record) => {
+    const mismatchReasons = record.matching.status === "Mismatch"
+      ? dedupeDiscrepancies(record.discrepancies || []).map((discrepancy) => {
+          const values = [
+            discrepancy.poValue && discrepancy.poValue !== "Missing" ? `PO: ${discrepancy.poValue}` : "",
+            discrepancy.doGrnValue && discrepancy.doGrnValue !== "Missing" ? `DO/GRN: ${discrepancy.doGrnValue}` : "",
+            discrepancy.invoiceValue && discrepancy.invoiceValue !== "Missing" ? `Invoice: ${discrepancy.invoiceValue}` : "",
+          ].filter(Boolean);
+          return `${discrepancy.type}: ${discrepancy.field}${values.length ? ` (${values.join(", ")})` : ""}`;
+        }).join("\n")
+      : "";
+
+    return {
+      id: record.id,
+      supplierId: record.supplierId,
+      supplierName: record.invoice?.supplierName || record.purchaseOrder?.supplierName || "Needs Review",
+      poNumber: record.purchaseOrder?.poNumber || "Missing",
+      doGrnNumber: record.deliveryOrder?.doGrnNumber || "Missing",
+      invoiceNumber: record.invoice?.invoiceNumber || "Missing",
+      amount: record.amountPayable,
+      matchStatus: record.matching.status,
+      validationStatus: record.validation.status,
+      approvalStatus: record.approvalStatus,
+      paymentStatus: record.paymentStatus,
+      transactionId: record.payment?.transactionId || "-",
+      paymentMethod: record.payment?.method || "-",
+      paidAt: record.payment?.paidAt || "",
+      actionDate: record.payment?.paidAt || record.createdAt || "",
+      mismatchReasons,
+    };
+  });
 }
 
 module.exports = {
+  addDays,
   approvePayment,
+  calculatePaymentSchedule,
   createUploadRecord,
   deletePendingDocumentFromSet,
   deletePendingDocumentSet,
@@ -1575,6 +1937,9 @@ module.exports = {
   getReportRows,
   getStats,
   markPaymentPaid,
+  normalisePaymentTerm,
+  paymentTermDefinition,
+  paymentTermLabel,
   paymentStatuses,
   rejectPayment,
   saveCorrectedData,

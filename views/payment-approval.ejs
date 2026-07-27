@@ -1,9 +1,7 @@
 <%- include("partials/header") %>
 
 <%
-  const viewRecords = [...(locals.records || [])].sort((left, right) =>
-    new Date(right.createdAt || 0) - new Date(left.createdAt || 0)
-  );
+  const viewRecords = [...(locals.records || [])];
   const requestedFilter = locals.currentFilter || "all";
   const normalisedFilter = requestedFilter === "paid" ? "completed" : requestedFilter;
   const viewCurrentFilter = ["all", "pending", "approved", "rejected", "completed"].includes(normalisedFilter)
@@ -17,6 +15,59 @@
     .toLowerCase()
     .replaceAll(" ", "-")
     .replaceAll("/", "-");
+  const formatPaymentDate = (value) => value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "-";
+  const formatPaymentTerm = (value) => {
+    const compact = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const netMatch = compact.match(/^NET(\d+)$/);
+    if (netMatch) return `Net ${netMatch[1]}`;
+    if (compact === "DUEONRECEIPT") return "Due on Receipt";
+    return String(value || "").trim() || "Not available";
+  };
+  const calculateSchedule = (invoiceDateValue, paymentTermValue, storedDueDate, storedDaysRemaining, storedPriority) => {
+    let dueDate = storedDueDate || "";
+    const compactTerm = String(paymentTermValue || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const netMatch = compactTerm.match(/^NET(\d+)$/);
+    const supportedDays = compactTerm === "DUEONRECEIPT"
+      ? 0
+      : netMatch
+        ? Number(netMatch[1])
+        : null;
+
+    if (!dueDate && invoiceDateValue && supportedDays !== null) {
+      const invoiceDate = new Date(`${invoiceDateValue}T00:00:00Z`);
+      if (!Number.isNaN(invoiceDate.getTime())) {
+        invoiceDate.setUTCDate(invoiceDate.getUTCDate() + supportedDays);
+        dueDate = invoiceDate.toISOString().slice(0, 10);
+      }
+    }
+
+    let daysRemaining = storedDaysRemaining;
+    if (daysRemaining == null && dueDate) {
+      const now = new Date();
+      const currentDate = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      daysRemaining = Math.round((Date.parse(`${dueDate}T00:00:00Z`) - currentDate) / 86400000);
+    }
+
+    const priority = storedPriority || (
+      daysRemaining == null
+        ? "Manual Review Required"
+        : daysRemaining < 0
+          ? "Overdue"
+          : daysRemaining <= 7
+            ? "High"
+            : daysRemaining <= 14
+              ? "Medium"
+              : "Low"
+    );
+
+    return { dueDate, daysRemaining, priority };
+  };
   const isPending = (record) => ["Pending Approval", "Payment Held"].includes(record.paymentStatus);
   const isApproved = (record) => record.paymentStatus === "Approved for Payment";
   const isProcessing = (record) => record.paymentStatus === "Payment Processing";
@@ -51,7 +102,7 @@
 <section class="panel payment-workflow-panel">
   <div class="section-heading workflow-heading">
     <div>
-      <p class="eyebrow">Latest first</p>
+      <p class="eyebrow">Due soonest first</p>
       <h2>Payment Approval Workflow</h2>
       <p>Review document checks, approve eligible invoices, and track each payment through completion.</p>
     </div>
@@ -99,7 +150,7 @@
     <div>
       <h3><%= filters.find((filter) => filter.key === viewCurrentFilter)?.label || "All" %> payments</h3>
       <p id="workflowResultSummary">
-        <span id="workflowResultCount"><%= filteredRecords.length %></span> record<span id="workflowResultPlural"><%= filteredRecords.length === 1 ? "" : "s" %></span>, ordered from latest invoice date.
+        <span id="workflowResultCount"><%= filteredRecords.length %></span> record<span id="workflowResultPlural"><%= filteredRecords.length === 1 ? "" : "s" %></span>, ordered by nearest due date.
         <% if (viewSearchQuery) { %> Results for “<%= viewSearchQuery %>”.<% } %>
       </p>
     </div>
@@ -117,6 +168,7 @@
             <th>Amount</th>
             <th>Document Checks</th>
             <th>Payment Stage</th>
+            <th>Payment Schedule</th>
             <th>Invoice Date</th>
             <th>Action</th>
           </tr>
@@ -133,6 +185,14 @@
               const displayedCurrency = isCompleted(record) && record.payment?.currency
                 ? record.payment.currency
                 : (record.paymentCurrency || "SGD");
+              const displayedPaymentTerm = record.paymentTermDisplay || formatPaymentTerm(record.invoice?.paymentTermCode);
+              const paymentSchedule = calculateSchedule(
+                record.invoice?.documentDate || record.createdAt,
+                record.invoice?.paymentTermCode,
+                record.dueDate,
+                record.daysRemaining,
+                record.paymentPriority
+              );
             %>
             <tr
               data-workflow-row
@@ -162,8 +222,30 @@
               <td data-label="Payment Stage">
                 <span class="status <%= statusClass(record.paymentStatus) %>"><%= record.paymentStatus %></span>
               </td>
+              <td data-label="Payment Schedule">
+                <div class="payment-schedule" data-payment-schedule data-due-date="<%= paymentSchedule.dueDate %>">
+                  <span><strong>Terms:</strong> <%= displayedPaymentTerm %></span>
+                  <span><strong>Due:</strong> <span data-due-date-label><%= formatPaymentDate(paymentSchedule.dueDate) %></span></span>
+                  <span data-days-remaining>
+                    <strong>Remaining:</strong>
+                    <%= paymentSchedule.daysRemaining == null
+                      ? "Not calculated"
+                      : paymentSchedule.daysRemaining < 0
+                        ? `${Math.abs(paymentSchedule.daysRemaining)} day${Math.abs(paymentSchedule.daysRemaining) === 1 ? "" : "s"} overdue`
+                        : `${paymentSchedule.daysRemaining} day${paymentSchedule.daysRemaining === 1 ? "" : "s"}` %>
+                  </span>
+                  <span class="priority-badge priority-<%= statusClass(paymentSchedule.priority) %>" data-priority>
+                    <%= paymentSchedule.priority %>
+                  </span>
+                  <% if (paymentSchedule.priority === "Manual Review Required") { %>
+                    <a class="payment-schedule-review" href="/extract/<%= encodeURIComponent(record.id) %>?mode=edit&from=validate-data">
+                      Correct invoice details
+                    </a>
+                  <% } %>
+                </div>
+              </td>
               <td data-label="Invoice Date">
-                <span class="workflow-date"><%= record.createdAt ? new Date(`${record.createdAt}T00:00:00`).toLocaleDateString("en-SG") : "-" %></span>
+                <span class="workflow-date"><%= record.createdAt ? new Date(record.createdAt).toLocaleDateString("en-SG") : "-" %></span>
               </td>
               <td data-label="Action">
                 <% if (isPending(record)) { %>
@@ -201,7 +283,7 @@
                 <% } else if (isProcessing(record)) { %>
                   <span class="workflow-no-action">In progress</span>
                 <% } else if (isCompleted(record)) { %>
-                  <span class="workflow-no-action">Completed</span>
+                  <a class="table-link" href="/receipt/<%= encodeURIComponent(record.id) %>">View Receipt</a>
                 <% } else { %>
                   <span class="workflow-no-action">No action</span>
                 <% } %>
@@ -213,6 +295,65 @@
     </div>
   <% } %>
 </section>
+
+<script>
+  (() => {
+    const schedules = document.querySelectorAll("[data-payment-schedule]");
+    if (!schedules.length) return;
+
+    const today = new Date();
+    const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    schedules.forEach((schedule) => {
+      const dueDateValue = schedule.dataset.dueDate;
+      if (!dueDateValue) return;
+
+      const [year, month, day] = dueDateValue.split("-").map(Number);
+      const dueDate = new Date(year, month - 1, day);
+      const daysRemaining = Math.round((dueDate - localToday) / 86400000);
+      const remaining = schedule.querySelector("[data-days-remaining]");
+      const priority = schedule.querySelector("[data-priority]");
+      const priorityLabel = daysRemaining < 0
+        ? "Overdue"
+        : daysRemaining <= 7
+          ? "High"
+          : daysRemaining <= 14
+            ? "Medium"
+            : "Low";
+
+      if (remaining) {
+        const count = Math.abs(daysRemaining);
+        remaining.innerHTML = `<strong>Remaining:</strong> ${
+          daysRemaining < 0
+            ? `${count} day${count === 1 ? "" : "s"} overdue`
+            : `${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+        }`;
+      }
+      if (priority) {
+        priority.textContent = priorityLabel;
+        priority.className = `priority-badge priority-${priorityLabel.toLowerCase()}`;
+      }
+    });
+
+    const nextDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1,
+      0,
+      0,
+      1
+    );
+    window.setTimeout(() => window.location.reload(), nextDay.getTime() - today.getTime());
+
+    const openedDateKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      const current = new Date();
+      const currentDateKey = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
+      if (currentDateKey !== openedDateKey) window.location.reload();
+    });
+  })();
+</script>
 
 <script>
   (() => {

@@ -93,19 +93,28 @@ CREATE TABLE `supplier_invoices` (
   `supplier_id` VARCHAR(20) NOT NULL,
   `po_id` VARCHAR(20) NOT NULL,
   `do_id` VARCHAR(20) NULL,
-  `invoice_date` DATE NOT NULL,
+  `invoice_date` DATE NULL,
   `item_id` VARCHAR(20) NOT NULL,
   `qty_invoiced` DECIMAL(10,2) NOT NULL,
   `unit_price` DECIMAL(12,2) NOT NULL,
   `tax_amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   `total_amount` DECIMAL(12,2) NOT NULL,
   `currency` VARCHAR(10) NOT NULL,
+  `payment_term_code` VARCHAR(20) NULL,
+  `extracted_payment_term` VARCHAR(100) NULL,
+  `uploaded_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (`invoice_id`),
 
   CONSTRAINT `fk_invoice_supplier`
     FOREIGN KEY (`supplier_id`)
     REFERENCES `supplier_master` (`supplier_id`)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+
+  CONSTRAINT `fk_invoice_payment_term`
+    FOREIGN KEY (`payment_term_code`)
+    REFERENCES `payment_terms` (`term_code`)
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
 
@@ -127,8 +136,8 @@ CREATE TABLE `payment_due_list` (
   `payment_due_id` INT NOT NULL AUTO_INCREMENT,
   `supplier_id` VARCHAR(20) NOT NULL,
   `invoice_id` VARCHAR(20) NOT NULL,
-  `invoice_date` DATE NOT NULL,
-  `due_date` DATE NOT NULL,
+  `invoice_date` DATE NULL,
+  `due_date` DATE NULL,
   `amount_due` DECIMAL(12,2) NOT NULL,
   `currency` VARCHAR(10) NOT NULL,
   `payment_status` ENUM(
@@ -287,6 +296,7 @@ INSERT INTO payment_terms
 VALUES
 ('NET30', 'Pay in 30 days', 30, 'FIXED'),
 ('NET60', 'Pay in 60 days', 60, 'FIXED'),
+('DUEONRECEIPT', 'Due on receipt', 0, 'FIXED'),
 ('EOM30', 'End of month plus 30 days', 30, 'EOM');
 
 INSERT INTO supplier_master
@@ -311,11 +321,12 @@ VALUES
 ('DO5003', 'PO1003', '2026-01-20', 'ITEM003', 50.00);
 
 INSERT INTO supplier_invoices
-(invoice_id, supplier_id, po_id, do_id, invoice_date, item_id, qty_invoiced, unit_price, tax_amount, total_amount, currency)
+(invoice_id, supplier_id, po_id, do_id, invoice_date, item_id, qty_invoiced, unit_price,
+ tax_amount, total_amount, currency, payment_term_code, extracted_payment_term)
 VALUES
-('INV9001', 'SUP001', 'PO1001', 'DO5001', '2026-01-20', 'ITEM001', 100.00, 10.00, 90.00, 1090.00, 'SGD'),
-('INV9002', 'SUP002', 'PO1002', 'DO5002', '2026-01-22', 'ITEM002', 200.00, 5.00, 90.00, 1090.00, 'SGD'),
-('INV9003', 'SUP003', 'PO1003', 'DO5003', '2026-01-25', 'ITEM003', 50.00, 25.00, 0.00, 1250.00, 'USD');
+('INV9001', 'SUP001', 'PO1001', 'DO5001', '2026-01-20', 'ITEM001', 100.00, 10.00, 90.00, 1090.00, 'SGD', 'NET30', 'NET30'),
+('INV9002', 'SUP002', 'PO1002', 'DO5002', '2026-01-22', 'ITEM002', 200.00, 5.00, 90.00, 1090.00, 'SGD', 'NET60', 'NET60'),
+('INV9003', 'SUP003', 'PO1003', 'DO5003', '2026-01-25', 'ITEM003', 50.00, 25.00, 0.00, 1250.00, 'USD', 'EOM30', 'EOM30');
 
 INSERT INTO payment_due_list
 (supplier_id, invoice_id, invoice_date, due_date, amount_due, currency, payment_status, exception_flag)
