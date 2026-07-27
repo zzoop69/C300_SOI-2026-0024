@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
-const XLSX = require("xlsx");
+const XLSX = require("xlsx-js-style");
 const paypal = require("../services/paypal");
 const {
   applyPayPalStatusByBatch,
@@ -168,6 +168,7 @@ function matchingHistoryExportRow(row) {
     "Match Status": row.matchStatus,
     "Validation Status": row.validationStatus,
     "Approval Status": row.approvalStatus,
+    "Mismatch Reasons": row.mismatchReasons || "",
   };
 }
 
@@ -184,6 +185,7 @@ function appendMatchingHistorySheet(workbook, sheetName, rows) {
       "Match Status",
       "Validation Status",
       "Approval Status",
+      "Mismatch Reasons",
     ],
   });
 
@@ -197,7 +199,33 @@ function appendMatchingHistorySheet(workbook, sheetName, rows) {
     { wch: 18 },
     { wch: 20 },
     { wch: 20 },
+    { wch: 55 },
   ];
+
+  worksheet["!rows"] = [
+    { hpt: 24 },
+    ...exportRows.map((row) => {
+      const reasonLines = String(row["Mismatch Reasons"] || "")
+        .split("\n")
+        .reduce((lineCount, reason) => lineCount + Math.max(1, Math.ceil(reason.length / 55)), 0);
+      return { hpt: Math.max(22, Math.min(reasonLines * 18, 240)) };
+    }),
+  ];
+
+  const range = XLSX.utils.decode_range(worksheet["!ref"]);
+  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
+      if (!cell) continue;
+      cell.s = {
+        ...(cell.s || {}),
+        alignment: {
+          vertical: "top",
+          wrapText: columnIndex === range.e.c,
+        },
+      };
+    }
+  }
 
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 }
@@ -364,14 +392,20 @@ router.get("/extract/:id", asyncRoute(async (req, res) => {
 
 router.post("/extract/:id/save", asyncRoute(async (req, res) => {
   const result = await saveCorrectedData(req.params.id, req.body);
-  if (req.body.returnContext === "validate-data") {
-    const updatedRecord = await getRecord(result.recordId);
-    if (updatedRecord?.validation?.status === "Invalid") {
-      res.redirect(
-        `/extract/${encodeURIComponent(result.recordId)}?mode=edit&from=validate-data&revalidated=true`
-      );
-      return;
-    }
+  if (!result.saved) {
+    const fromExtractedData = req.body.returnContext === "extracted-data";
+    res.status(422).render("extract-review", {
+      pageTitle: "Extracted Data Review",
+      activePage: "review",
+      record: result.record,
+      viewOnly: false,
+      fromValidation: !fromExtractedData,
+      backUrl: fromExtractedData ? "/extracted-data" : "/validate-data",
+      saved: false,
+      revalidated: true,
+      supplierCreated: false,
+    });
+    return;
   }
   res.redirect(`/matching-results/${encodeURIComponent(result.recordId)}?updated=true`);
 }));

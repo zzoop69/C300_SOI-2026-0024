@@ -4,12 +4,22 @@
   const isViewOnly = Boolean(locals.viewOnly);
   const isFromValidation = Boolean(locals.fromValidation);
   const readOnlyAttributes = isViewOnly ? 'readonly aria-readonly="true"' : '';
-  const validationFieldErrors = record.validation?.fieldErrors || {};
-  const hasInvalidFields = !isViewOnly && Object.values(validationFieldErrors)
+  const reviewFieldErrors = {};
+  [record.validation?.fieldErrors || {}, record.matching?.fieldErrors || {}].forEach((errorMap) => {
+    Object.entries(errorMap).forEach(([fieldKey, messages]) => {
+      reviewFieldErrors[fieldKey] ||= [];
+      (Array.isArray(messages) ? messages : []).forEach((message) => {
+        if (!reviewFieldErrors[fieldKey].includes(message)) {
+          reviewFieldErrors[fieldKey].push(message);
+        }
+      });
+    });
+  });
+  const hasHighlightedFields = Object.values(reviewFieldErrors)
     .some((errors) => Array.isArray(errors) && errors.length > 0);
   locals.isViewOnly = isViewOnly;
   locals.readOnlyAttributes = readOnlyAttributes;
-  locals.validationFieldErrors = validationFieldErrors;
+  locals.reviewFieldErrors = reviewFieldErrors;
 %>
 
 <% if (saved) { %>
@@ -37,9 +47,11 @@
   </div>
 
   <form action="/extract/<%= record.id %>/save" method="POST">
-    <% if (isFromValidation) { %>
-      <input type="hidden" name="returnContext" value="validate-data">
-    <% } %>
+    <input
+      type="hidden"
+      name="returnContext"
+      value="<%= isFromValidation ? 'validate-data' : 'extracted-data' %>"
+    >
     <div class="review-grid">
       <article class="review-card">
         <div class="card-heading">
@@ -84,6 +96,13 @@
         <%- include("partials/review-field", { fieldKey: "invoice.quantityBilled", fieldLabel: "Quantity Billed", inputName: "invoiceQuantityBilled", fieldValue: record.invoice?.quantityBilled, inputType: "number", step: "0.01" }) %>
         <%- include("partials/review-field", { fieldKey: "invoice.unitPrice", fieldLabel: "Unit Price", inputName: "invoiceUnitPrice", fieldValue: record.invoice?.unitPrice, inputType: "number", step: "0.01" }) %>
         <%- include("partials/review-field", { fieldKey: "invoice.totalAmount", fieldLabel: "Total Amount", inputName: "invoiceTotalAmount", fieldValue: record.invoice?.totalAmount, inputType: "number", step: "0.01" }) %>
+        <%- include("partials/review-field", {
+          fieldKey: "invoice.paymentTermCode",
+          fieldLabel: "Payment Terms",
+          inputName: "invoicePaymentTermCode",
+          fieldValue: record.invoice?.paymentTermCode,
+          forceReadOnly: false
+        }) %>
       </article>
     </div>
 
@@ -97,7 +116,7 @@
   </form>
 </section>
 
-<% if (hasInvalidFields) { %>
+<% if (hasHighlightedFields && !isViewOnly) { %>
   <script>
     (() => {
       const firstInvalidInput = document.querySelector(".review-field--invalid input");

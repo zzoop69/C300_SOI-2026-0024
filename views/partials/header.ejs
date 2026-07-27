@@ -27,6 +27,53 @@
 
     <main class="content">
       <header class="page-header">
-        <p class="eyebrow">Autonomous Supplier Payment Process</p>
-        <h1><%= pageTitle %></h1>
+        <div class="page-header-title">
+          <p class="eyebrow">Autonomous Supplier Payment Process</p>
+          <h1><%= pageTitle %></h1>
+        </div>
+        <time
+          id="currentDeviceDate"
+          class="current-device-date"
+          aria-label="Current date"
+          aria-live="polite"
+        ></time>
       </header>
+      <script>
+        (() => {
+          const dateElement = document.getElementById("currentDeviceDate");
+          if (!dateElement) return;
+
+          let dateChangeTimer;
+          const formatter = new Intl.DateTimeFormat("en-GB", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+
+          const updateCurrentDate = () => {
+            const now = new Date();
+            dateElement.textContent = `Date today: ${formatter.format(now)}`;
+            dateElement.dateTime = [
+              now.getFullYear(),
+              String(now.getMonth() + 1).padStart(2, "0"),
+              String(now.getDate()).padStart(2, "0"),
+            ].join("-");
+
+            window.clearTimeout(dateChangeTimer);
+            const nextDay = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() + 1,
+              0,
+              0,
+              1
+            );
+            dateChangeTimer = window.setTimeout(updateCurrentDate, nextDay.getTime() - now.getTime());
+          };
+
+          updateCurrentDate();
+          document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) updateCurrentDate();
+          });
+        })();
+      </script>

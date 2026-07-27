@@ -1,10 +1,12 @@
 <%
-  const errors = !isViewOnly && Array.isArray(validationFieldErrors[fieldKey])
-    ? validationFieldErrors[fieldKey]
+  const errors = Array.isArray(reviewFieldErrors[fieldKey])
+    ? reviewFieldErrors[fieldKey]
     : [];
   const isInvalid = errors.length > 0;
   const errorId = `${inputName}-validation-error`;
   const inputType = locals.inputType || "text";
+  const isReadOnly = isViewOnly || Boolean(locals.forceReadOnly);
+  const inputAttributes = isReadOnly ? 'readonly aria-readonly="true"' : readOnlyAttributes;
 %>
 <label class="review-field <%= isInvalid ? 'review-field--invalid' : '' %>">
   <span class="review-field-label">
@@ -17,10 +19,10 @@
     id="<%= inputName %>"
     type="<%= inputType %>"
     <% if (locals.step) { %>step="<%= step %>"<% } %>
-    name="<%= inputName %>"
+    <% if (locals.submitField !== false) { %>name="<%= inputName %>"<% } %>
     value="<%= fieldValue || '' %>"
     <% if (isInvalid) { %>aria-invalid="true" aria-describedby="<%= errorId %>"<% } %>
-    <%- readOnlyAttributes %>
+    <%- inputAttributes %>
   >
   <% if (isInvalid) { %>
     <span class="review-field-errors" id="<%= errorId %>">

@@ -425,5 +425,264 @@
     "lastUploadedAt": "2026-07-24T08:28:49.717Z",
     "extractedRecordId": "INV-013",
     "status": "Ready for Validation"
+  },
+  {
+    "id": "PDS-MS07GYWY-Z49DI",
+    "poNumber": "PO-2026-019",
+    "supplierName": "Evergreen Facility Services Pte Ltd",
+    "documents": {
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "PO-2026-019(1).xlsx",
+          "storedName": "8c6d5f3e8d740b4c14f477294676d355",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\8c6d5f3e8d740b4c14f477294676d355",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-019",
+          "supplierName": "Evergreen Facility Services Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-08-11"
+        },
+        "uploadedAt": "2026-07-25T10:07:44.569Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "DO-2026-019.xlsx",
+          "storedName": "3d40ac326266caaa267db1905ed535e9",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\3d40ac326266caaa267db1905ed535e9",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-019",
+          "supplierName": "Evergreen Facility Services Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "DO-2026-019",
+          "documentDate": "2026-08-13"
+        },
+        "uploadedAt": "2026-07-25T10:08:09.526Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "INVOICE-2026-019(1).xlsx",
+          "storedName": "0a364828724ce87164742740cebedf67",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\0a364828724ce87164742740cebedf67",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-019",
+          "supplierName": "Evergreen Facility Services Pte Ltd",
+          "invoiceNumber": "INV-2026-019",
+          "doGrnNumber": "",
+          "documentDate": "2026-08-14"
+        },
+        "uploadedAt": "2026-07-25T10:08:09.542Z"
+      }
+    },
+    "createdAt": "2026-07-25T10:07:44.569Z",
+    "lastUploadedAt": "2026-07-25T10:08:09.542Z",
+    "extractedRecordId": "INV-2026-019",
+    "status": "Ready for Validation"
+  },
+  {
+    "id": "PDS-MS1RX1LV-M8N17",
+    "poNumber": "PO-2026-022",
+    "supplierName": "SafeGuard Industrial Supplies Pte Ltd",
+    "documents": {
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "PO-2026-022(1).xlsx",
+          "storedName": "9dde3c483fdeec5687d564652fcd270a",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\9dde3c483fdeec5687d564652fcd270a",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-022",
+          "supplierName": "SafeGuard Industrial Supplies Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-08-19"
+        },
+        "uploadedAt": "2026-07-26T12:27:53.050Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "DO-2026-022(1).xlsx",
+          "storedName": "54c96928ffeea8f79a6a651a983d51e6",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\54c96928ffeea8f79a6a651a983d51e6",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-022",
+          "supplierName": "SafeGuard Industrial Supplies Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "DO-2026-022",
+          "documentDate": "2026-08-23"
+        },
+        "uploadedAt": "2026-07-26T12:28:09.804Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "INVOICE-2026-022(1).xlsx",
+          "storedName": "7ed253d687fcbef5824e285ea7586be2",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\7ed253d687fcbef5824e285ea7586be2",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-022",
+          "supplierName": "SafeGuard Industrial Supplies Pte Ltd",
+          "invoiceNumber": "INV-2026-022",
+          "doGrnNumber": "",
+          "documentDate": "2026-08-24"
+        },
+        "uploadedAt": "2026-07-26T12:28:09.825Z"
+      }
+    },
+    "createdAt": "2026-07-26T12:27:53.050Z",
+    "lastUploadedAt": "2026-07-26T12:28:09.825Z",
+    "extractedRecordId": "INV-2026-022",
+    "status": "Ready for Validation"
+  },
+  {
+    "id": "PDS-MS1W3X5A-W9CXM",
+    "poNumber": "PO-2026-023",
+    "supplierName": "Harbour Tech Accessories Pte Ltd",
+    "documents": {
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "PO-2026-023.xlsx",
+          "storedName": "e786aca4f302864427d42be73618bed0",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\e786aca4f302864427d42be73618bed0",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-023",
+          "supplierName": "Harbour Tech Accessories Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-07-09"
+        },
+        "uploadedAt": "2026-07-26T14:25:12.321Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "DO-2026-023.xlsx",
+          "storedName": "86a9bd1b5f290d52e986584f8296aad8",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\86a9bd1b5f290d52e986584f8296aad8",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-023",
+          "supplierName": "Harbour Tech Accessories Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "DO-2026-023",
+          "documentDate": "2026-07-11"
+        },
+        "uploadedAt": "2026-07-26T14:25:12.347Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "INVOICE-2026-023.xlsx",
+          "storedName": "e19b74121cf48dcef0cf74f0c68ee1a6",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\e19b74121cf48dcef0cf74f0c68ee1a6",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-023",
+          "supplierName": "Harbour Tech Accessories Pte Ltd",
+          "invoiceNumber": "INV-2026-023",
+          "doGrnNumber": "",
+          "documentDate": "2026-07-13"
+        },
+        "uploadedAt": "2026-07-26T14:26:13.620Z"
+      }
+    },
+    "createdAt": "2026-07-26T14:25:12.321Z",
+    "lastUploadedAt": "2026-07-26T14:26:13.620Z",
+    "extractedRecordId": ""
+  },
+  {
+    "id": "PDS-MS1WGRXL-O3V37",
+    "poNumber": "PO-2026-025",
+    "supplierName": "Metro Cleaning Essentials Pte Ltd",
+    "documents": {
+      "purchaseOrder": {
+        "documentType": "purchaseOrder",
+        "label": "Purchase Order",
+        "file": {
+          "originalName": "PO-2026-025.xlsx",
+          "storedName": "ada5a76f9bd06895d16fc47b020f3303",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\ada5a76f9bd06895d16fc47b020f3303",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-025",
+          "supplierName": "Metro Cleaning Essentials Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "",
+          "documentDate": "2026-05-29"
+        },
+        "uploadedAt": "2026-07-26T14:35:12.095Z"
+      },
+      "deliveryOrder": {
+        "documentType": "deliveryOrder",
+        "label": "DO/GRN",
+        "file": {
+          "originalName": "DO-2026-025.xlsx",
+          "storedName": "906d46c4ea1bb9debceacb311253611c",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\906d46c4ea1bb9debceacb311253611c",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-025",
+          "supplierName": "Metro Cleaning Essentials Pte Ltd",
+          "invoiceNumber": "",
+          "doGrnNumber": "DO-2026-025",
+          "documentDate": "2026-05-31"
+        },
+        "uploadedAt": "2026-07-26T14:35:12.124Z"
+      },
+      "invoice": {
+        "documentType": "invoice",
+        "label": "Supplier Invoice",
+        "file": {
+          "originalName": "INVOICE-2026-025.xlsx",
+          "storedName": "161586e8bcfdf934f69befec151a5030",
+          "path": "C:\\fyp\\C300_SOI-2026-0024-main\\uploads\\161586e8bcfdf934f69befec151a5030",
+          "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "metadata": {
+          "poNumber": "PO-2026-025",
+          "supplierName": "Metro Cleaning Essentials Pte Ltd",
+          "invoiceNumber": "INV-2026-025",
+          "doGrnNumber": "",
+          "documentDate": "2026-06-02"
+        },
+        "uploadedAt": "2026-07-26T14:35:27.779Z"
+      }
+    },
+    "createdAt": "2026-07-26T14:35:12.095Z",
+    "lastUploadedAt": "2026-07-26T14:35:27.779Z",
+    "extractedRecordId": "INV-2026-025",
+    "status": "Ready for Validation"
   }
 ]
